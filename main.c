@@ -24,12 +24,14 @@
 #include <string.h>
 #include <json.h>
 #include <mosquitto.h>
+#include <time.h>
 
 static int mqtt_port=1883;
 static char mqtt_host[256];
 static char logDir[256]="logLocal";
 static int unitaryLogDir;
 static char logFilePrefix[256];
+static char logFileSuffix[256];
 static int splitLogFilesByDay = 1;	
 static int flushAfterEachMessage = 1;
 #define MAX_TOPICS 16
@@ -123,12 +125,164 @@ return ret_val;
 }
 	
 
+#define ALARM_SECONDS 10
+static int run = 1;
+
+
+void handle_signal(int signum) {
+	
+	if ( SIGALRM == signum ) {
+		/* keep alive modbus connection */
+
+	} else {
+		fprintf(stderr,"# %s signal received. Terminating.\n",strsignal(signum));
+		run = 0;
+		
+
+	}
+
+}
+
+void connect_callback(struct mosquitto *mosq, void *obj, int result) {
+	printf("# connect_callback, rc=%d\n", result);
+}
+
+void message_callback(struct mosquitto *mosq, void *obj, const struct mosquitto_message *message) {
+	char data[4];
+	bool match = 0;
+	char	_topic[256] = {};
+	int	i;
+
+	/* cancel pending alarm */
+	alarm(0);
+	/* set an alarm to send a SIGALARM if data not received within alarmSeconds */
+ 	alarm(ALARM_SECONDS);
+
+
+	printf("got message '%.*s' for topic '%s'\n", message->payloadlen, (char*) message->payload, message->topic);
+
+	/* local copy of our message */
+	strncpy(data, (char *) message->payload,3);
+	data[3]='\0';
+
+	
+
+	for ( match = i = 0; 0 == match && topicsCount > i; i++ ) 
+		mosquitto_topic_matches_sub(topics[i], message->topic, &match);
+	strncpy(_topic,topics[i],sizeof(_topic));
+
+	if (match) {
+		FILE	*out;
+		char	fname[256];
+		char	prefix[256] = {};
+		char	suffix[256] = {};
+		char	timestamp[32] = {};
+		struct tm *now;
+		time_t right_now;
+		fprintf(stderr,"got message for %s\n",message->topic);
+		if ( -1 == time(&right_now) ) {
+			fprintf(stderr,"# error calling time() %s",strerror(errno));
+			exit(1);
+		}
+		now = localtime(&right_now);
+		if ( 0 == now ) {
+			fprintf(stderr,"# error calling localtime() %s",strerror(errno));
+			exit(1);
+		}
+		snprintf(timestamp,sizeof(timestamp),"%04d-%02d-%02d %02d:%02d:%02d,",
+			1900 + now->tm_year,1 + now->tm_mon, now->tm_mday,now->tm_hour,now->tm_min,now->tm_sec);
+			
+
+		if ( ' ' < logFilePrefix[0] )
+			strncpy(prefix,logFilePrefix,sizeof(prefix));
+		else {
+			snprintf(prefix,sizeof(prefix),"%04d%02d%02d",
+				1900 + now->tm_year,1 + now->tm_mon, now->tm_mday);
+		}
+		if ( ' ' < logFileSuffix[0] )
+			strncpy(suffix,logFileSuffix,sizeof(suffix));
+		snprintf(fname,sizeof(fname),"%s/%s/%s%s",logDir,_topic,prefix,suffix);
+		out = fopen(fname,"a");
+		if ( 0 == out )	{
+			fprintf(stderr,"# error calling fopen(%s) %s\n",fname,strerror(errno));
+			exit(1);
+		}
+		if ( -1 == fputs(timestamp,out)) {
+			fprintf(stderr,"# error calling fputs(%s) %s\n",fname,strerror(errno));
+			exit(1);
+		}
+
+		if ( 1 != fwrite(message->payload,message->payloadlen,1,out )) {
+			fprintf(stderr,"# error calling fwrite(%s) %s\n",fname,strerror(errno));
+			exit(1);
+		}
+		if ( 0 != fclose(out)){
+			fprintf(stderr,"# error calling fclose(%s) %s\n",fname,strerror(errno));
+			exit(1);
+		}
+	}
+}
+
+static int startup_mosquitto(void) {
+	char clientid[24];
+	struct mosquitto *mosq;
+	int rc = 0;
+
+	fprintf(stderr,"# mqtt-modbus start-up\n");
+
+	fprintf(stderr,"# installing signal handlers\n");
+	signal(SIGINT, handle_signal);
+	signal(SIGTERM, handle_signal);
+	signal(SIGALRM, handle_signal);
+
+	fprintf(stderr,"# initializing mosquitto MQTT library\n");
+	mosquitto_lib_init();
+
+	memset(clientid, 0, 24);
+	snprintf(clientid, 23, "mqtt_modbus_%d", getpid());
+	mosq = mosquitto_new(clientid, true, 0);
+
+	if (mosq) {
+		int i;
+		mosquitto_connect_callback_set(mosq, connect_callback);
+		mosquitto_message_callback_set(mosq, message_callback);
+
+		fprintf(stderr,"# connecting to MQTT server %s:%d\n",mqtt_host,mqtt_port);
+		rc = mosquitto_connect(mosq, mqtt_host, mqtt_port, 60);
+
+		for ( i = 0; topicsCount > i; i++ )
+			mosquitto_subscribe(mosq, NULL, topics[i], 0);
+
+		while (run) {
+			rc = mosquitto_loop(mosq, -1, 1);
+
+			if ( run && rc ) {
+				printf("connection error!\n");
+				sleep(10);
+				mosquitto_reconnect(mosq);
+			}
+		}
+		mosquitto_destroy(mosq);
+	}
+
+	fprintf(stderr,"# mosquitto_lib_cleanup()\n");
+	mosquitto_lib_cleanup();
+
+	return rc;
+}
+
+
 int main(int argc, char **argv) {
-	int n;
+	int i,n;
+	int rc;
 
 	/* command line arguments */
-	while ((n = getopt (argc, argv, "p:l:D:dfFt:h")) != -1) {
+	while ((n = getopt (argc, argv, "s:p:l:D:dfFt:h")) != -1) {
 		switch (n) {
+			case 's':	
+				strncpy(logFileSuffix,optarg,sizeof(logFileSuffix));
+				fprintf(stderr,"# logFileSuffix=%s \n",logFileSuffix);
+				break;
 			case 't':
 				if ( topicsCount < MAX_TOPICS )
 					topics[topicsCount] = strsave(optarg);
@@ -162,11 +316,12 @@ int main(int argc, char **argv) {
 				fprintf(stderr,"# flushAfterEachMessage=%s \n","DISABLED");
 				break;
 			case 'h':
+				fprintf(stdout,"# -s\t\tend each log filename with suffix\n");
 				fprintf(stdout,"# -t\t\tmqtt topic must be used once and 1-%d times\n",MAX_TOPICS);
 				fprintf(stdout,"# -p\t\tmqtt port\t\tOPTIONAL\n");
 				fprintf(stdout,"# -l\t\tlogging derectory, default=logLocal\n");
 				fprintf(stdout,"# -1\t\tunitaryLogDir\n");
-				fprintf(stdout,"# -D\t\tstart each log filename with $prefix rather than YYMMDD\n");
+				fprintf(stdout,"# -D\t\tstart each log filename with prefix rather than YYMMDD\n");
 				fprintf(stdout,"# -d\t\tstart each log file with YYMMDD, start new file each day.  (default)\n");
 				fprintf(stdout,"# -f\t\tflushAfterEachMessage recieved to log file\n");
 				fprintf(stdout,"#\n");
@@ -202,7 +357,13 @@ int main(int argc, char **argv) {
 	if ( _enable_logging_dir(logDir)) {
 		return	1;
 	}
+	chdir(logDir);
+	for ( i = 0; topicsCount > i; i++ )
+		if (  _enable_logging_dir(topics[i]))
+			return	1;
+	rc = startup_mosquitto();
+	
 
 
-	return	0;
+	return	rc;
 }
