@@ -29,7 +29,7 @@ switch|Required/Optional|argument|description
 -s|OPTIONAL|text|end each log filename with suffix ie. ".json"   default="" 
 -p|OPTIONAL|number|default is 1883
 -l|OPTIONAL|path|logging derectory, default="logLocal"
--1|OPTIONAL|(none)|add logging will be done to one file in the logging derectory
+-1|OPTIONAL|(none)|all logging will be done to one file in the logging derectory
 -D|OPTIONAL|text|start each log filename with prefix rather than YYYYMMDD
 -d|OPTIONAL|(none)|start each log file with YYYYMMDD, start new file each day.  (default) 
 -f|OPTIONAL|(none)|unimplemented.	flush to log file after  each mqtt message.  (This is how it works).
