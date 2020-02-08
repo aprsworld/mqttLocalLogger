@@ -26,7 +26,7 @@ mqttLocalLogger subscribes to one or more mqtt topics and logs to one or multipl
 switch|Required/Optional|argument|description
 ---|---|---|---
 -t|REQUIRED|topic|mqtt topic
--s|OPTIONAL|text|end each log filename with suffix default="" ie. ".json"
+-s|OPTIONAL|text|end each log filename with suffix ie. ".json"   default="" 
 -p|OPTIONAL|number|default is 1883
 -l|OPTIONAL|path|logging derectory, default="logLocal"
 -1|OPTIONAL|(none)|add logging will be done to one file in the logging derectory
