@@ -183,7 +183,8 @@ void message_callback(struct mosquitto *mosq, void *obj, const struct mosquitto_
 	char	timestamp[32] = {};
 	char	path[256] = {};
 	struct tm *now;
-	time_t right_now;
+	struct timeval time;
+        gettimeofday(&time, NULL);
 
 	/* cancel pending alarm */
 	alarm(0);
@@ -198,17 +199,13 @@ void message_callback(struct mosquitto *mosq, void *obj, const struct mosquitto_
 	strncpy(data, (char *) message->payload,3);
 	data[3]='\0';
 
-	if ( -1 == time(&right_now) ) {
-		fprintf(stderr,"# error calling time() %s",strerror(errno));
-		exit(1);
-	}
-	now = localtime(&right_now);
+	now = localtime(&time.tv_sec);
 	if ( 0 == now ) {
 		fprintf(stderr,"# error calling localtime() %s",strerror(errno));
 		exit(1);
 	}
-	snprintf(timestamp,sizeof(timestamp),"%04d-%02d-%02d %02d:%02d:%02d,",
-		1900 + now->tm_year,1 + now->tm_mon, now->tm_mday,now->tm_hour,now->tm_min,now->tm_sec);
+	snprintf(timestamp,sizeof(timestamp),"%04d-%02d-%02d %02d:%02d:%02d.%03ld,",
+		1900 + now->tm_year,1 + now->tm_mon, now->tm_mday,now->tm_hour,now->tm_min,now->tm_sec,time.tv_usec/1000);
 		
 
 	if ( ' ' < logFilePrefix[0] )
