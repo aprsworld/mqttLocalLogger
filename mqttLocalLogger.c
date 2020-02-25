@@ -311,6 +311,19 @@ if ( 0 == rc ) topics_enable_logging_dir(p->right);
 return	rc;
 }
 
+enum arguments {
+	A_mqtt_host = 512,
+	A_mqtt_topic,
+	A_mqtt_port,
+	A_log_file_prefix,
+	A_log_file_suffix,
+	A_log_dir,
+	A_unitary_log_file,
+	A_split_log_file_by_day,
+	A_quiet,
+	A_verbose,
+	A_help,
+};
 int main(int argc, char **argv) {
 	int n;
 	int rc;
@@ -318,70 +331,100 @@ int main(int argc, char **argv) {
 	(void) getcwd(cwd,sizeof(cwd));
 
 	/* command line arguments */
-	while ((n = getopt (argc, argv, "1vs:p:l:D:dfFt:h")) != -1) {
+	while (1) {
+		// int this_option_optind = optind ? optind : 1;
+		int option_index = 0;
+		static struct option long_options[] = {
+			/* normal program */
+		        {"unitary-log-file",                 1,                 0, A_unitary_log_file },
+		        {"log-dir",                          1,                 0, A_log_dir },
+		        {"log-file-prefix",                  1,                 0, A_log_file_prefix },
+		        {"log-file-suffix",                  1,                 0, A_log_file_suffix },
+		        {"mqtt-host",                        1,                 0, A_mqtt_host },
+		        {"mqtt-topic",                       1,                 0, A_mqtt_topic },
+		        {"mqtt-port",                        1,                 0, A_mqtt_port },
+		        {"split-log-file-by-day",            no_argument,       0, A_split_log_file_by_day },
+			{"quiet",                            no_argument,       0, A_quiet, },
+			{"verbose",                          no_argument,       0, A_verbose, },
+		        {"help",                             no_argument,       0, A_help, },
+			{},
+		};
+
+		n = getopt_long(argc, argv, "", long_options, &option_index);
+
+		if (n == -1) {
+			break;
+		}
+		
 		switch (n) {
-			case 's':	
+			case A_log_file_suffix:	
 				strncpy(logFileSuffix,optarg,sizeof(logFileSuffix));
 				fprintf(stderr,"# logFileSuffix=%s \n",logFileSuffix);
 				break;
-			case 't':
+			case A_mqtt_host:	
+				strncpy(mqtt_host,optarg,sizeof(mqtt_host));
+				break;
+			case A_mqtt_topic:
 				add_topic(optarg);
 				break;
-			case 'p':
+			case A_mqtt_port:
 				mqtt_port = atoi(optarg);
 				break;
-			case 'l':	
+			case A_log_dir:	
 				strncpy(logDir,optarg,sizeof(logDir));
 				break;
-			case '1':
+			case A_unitary_log_file:
 				unitaryLogFile=1;
 				fprintf(stderr,"# unitaryLogFile\tlogging to one directory\n");
 				break;
-			case 'D':	
+			case A_log_file_prefix:	
 				strncpy(logFilePrefix,optarg,sizeof(logFilePrefix));
 				fprintf(stderr,"# logFilePrefix=%s \n",logFilePrefix);
 				splitLogFilesByDay = 0;
 				break;
-			case 'd':
+			case A_split_log_file_by_day:
 				splitLogFilesByDay = 1;
 				fprintf(stderr,"# logFilePrefix=%s \n","DISABLED");
 				break;
 			case 'f':
+				/* not implemented */
 				flushAfterEachMessage = 1;
 				fprintf(stderr,"# flushAfterEachMessage=%s \n","ENABLED");
 				break;
 			case 'F':
+				/* not implemented */
 				flushAfterEachMessage = 0;
 				fprintf(stderr,"# flushAfterEachMessage=%s \n","DISABLED");
 				break;
-			case 'v':
+			case A_verbose:
 				outputDebug=1;
 				fprintf(stderr,"# verbose (debugging) output to stderr enabled\n");
 				break;
-			case 'h':
-				fprintf(stdout,"# -s\t\tend each log filename with suffix\n");
-				fprintf(stdout,"# -t\t\tmqtt topic must be used at least once\n");
-				fprintf(stdout,"# -p\t\tmqtt port\t\tOPTIONAL\n");
-				fprintf(stdout,"# -l\t\tlogging derectory, default=logLocal\n");
-				fprintf(stdout,"# -1\t\tunitaryLogFile\n");
-				fprintf(stdout,"# -D\t\tstart each log filename with prefix rather than YYMMDD\n");
-				fprintf(stdout,"# -d\t\tstart each log file with YYMMDD, start new file each day.  (default)\n");
-				fprintf(stdout,"# -f\t\tflushAfterEachMessage recieved to log file\n");
-				fprintf(stdout,"# -v\t\tOutput verbose / debugging to stderr\n");
+			case A_help:
+				fprintf(stdout,"# --mqtt-host\t\t\tmqtt-host is required\tREQUIRED\n");
+				fprintf(stdout,"# --log-file-suffix\t\tend each log filename with suffix\n");
+				fprintf(stdout,"# --mqtt-topic\t\t\tmqtt topic must be used at least once\n");
+				fprintf(stdout,"# --mqtt-port\t\t\tmqtt port\t\tOPTIONAL\n");
+				fprintf(stdout,"# --log-dir\t\t\tlogging directory, default=logLocal\n");
+				fprintf(stdout,"# --unitary-log-file\t\tunitaryLogFile\n");
+				fprintf(stdout,"# --log-file-prefix\t\tstart each log filename with prefix rather than YYMMDD\n");
+				fprintf(stdout, "# --split-log-file-by-day\tstart each log file with YYMMDD, " \
+					"start new file each day.  (default)\n");
+				/* fprintf(stdout,"# -f\t\tflushAfterEachMessage recieved to log file\n");
+				fprintf(stdout,"# -v\t\tOutput verbose / debugging to stderr\n"); */
 				fprintf(stdout,"#\n");
-				fprintf(stdout,"# -h\t\tThis help message then exit\n");
+				fprintf(stdout,"# --help\t\t\tThis help message then exit\n");
 				fprintf(stdout,"#\n");
 				exit(0);
 		}
 	}
-	 if (optind >= argc) {
-               fprintf(stderr, "# Expected mqtt host after options\n");
+	 if ( ' ' >=  mqtt_host[0] ) {
+               fprintf(stderr, "# --mqtt-host <required>\n");
                exit(EXIT_FAILURE);
 	}
 	else
-		strncpy(mqtt_host,argv[optind],sizeof(mqtt_host));	
 	if ( 0 == topic_root ) {
-		fprintf(stderr,"# There must be at least one -t\n");
+		fprintf(stderr,"# There must be at least one --mqtt-topic\n");
                exit(EXIT_FAILURE);
 	}
 

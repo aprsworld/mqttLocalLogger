@@ -25,16 +25,15 @@ mqttLocalLogger subscribes to one or more mqtt topics and logs to one or multipl
 
 switch|Required/Optional|argument|description
 ---|---|---|---
--t|REQUIRED|topic|mqtt topic
--s|OPTIONAL|text|end each log filename with suffix ie. ".json"   default="" 
--p|OPTIONAL|number|default is 1883
--l|OPTIONAL|path|logging derectory, default="logLocal"
--1|OPTIONAL|(none)|all logging will be done to one file in the logging derectory
--D|OPTIONAL|text|start each log filename with prefix rather than YYYYMMDD
--d|OPTIONAL|(none)|start each log file with YYYYMMDD, start new file each day.  (default) 
--f|OPTIONAL|(none)|unimplemented.	flush to log file after  each mqtt message.  (This is how it works).
--v|OPTIONAL|(none)|Turn on verbose (debuging).
--h|OPTIONAL|(none)|displays help and exits
+--mqtt-topic|REQUIRED|topic|mqtt topic
+--log-file-suffix|OPTIONAL|text|end each log filename with suffix ie. ".json"   default="" 
+--mqtt-port|OPTIONAL|number|default is 1883
+--log-dir|OPTIONAL|path|logging derectory, default="logLocal"
+--unitary-log-file|OPTIONAL|(none)|all logging will be done to one file in the logging derectory
+--log-file-prefix|OPTIONAL|text|start each log filename with prefix rather than YYYYMMDD
+--split-log-file-by-day|OPTIONAL|(none)|start each log file with YYYYMMDD, start new file each day.  (default) 
+--verbose|OPTIONAL|(none)|Turn on verbose (debuging).
+--help|OPTIONAL|(none)|displays help and exits
 
 
 ## Discussion
@@ -44,34 +43,34 @@ is localhost.   The required option is -t (one or more times).
 
 ### Simplest example
 
-`./mqttLocalLogger -t topic/left/right localhost`
+`./mqttLocalLogger --mqtt-topic topic/left/right --mqtt-host localhost`
 
 This causes mqttLocalLogger to subscribe to the mqtt server on local host with the topic of `topic/left/right`.   Any messages on 
 that topic will be logged to the file `./logLocal/topic/left/rigth/YYYYMMDD`, where if the current date is Christmas 2020 then 
 YYYYMMDD="20201225".  Any packet received will be prepended with "2020-12-25 13:45:20," or whatever the current date and time.
 
-### Adding -s .json
+### Adding --log-file-suffix .json
 
-`./mqttLocalLogger -t topic/left/right -s .json localhost`
+`./mqttLocalLogger --mqtt-topic topic/left/right --log-file-suffix .json --mqtt-host localhost`
 
 Nothing changes from the simplest example except that any messages on
 that topic will be logged to the file `./logLocal/topic/left/rigth/YYYYMMDD.json`.
 
-### Adding -l up/down
+### Adding --log-dir up/down
 
-`./mqttLocalLogger -l updown -t topic/left/right localhost`
+`./mqttLocalLogger --log-dir updown --mqtt-topic topic/left/right --mqtt-host localhost`
 
 Nothing changes from the simplest example except that any messages on
 that topic will be logged to the file `./up/down/topic/left/rigth/YYYYMMDD`.
 
-### Adding -D BalloonData
+### Adding --log-file-prefix BalloonData
 
-`./mqttLocalLogger -D BalloonData -t topic/left/right localhost`
+`./mqttLocalLogger --log-file-prefix BalloonData --mqtt-topic topic/left/right --mqtt-host localhost`
 
 Nothing changes from the simplest example except that any messages on
 that topic will be logged to the file `./logLocal/topic/left/rigth/BalloonData`.
 
-### Adding -p 2025
+### Adding --mqtt-port 2025
 
 Nothing changes from the simplest example except that  a connection is attempted to mqtt server
 on port 2025 instead of 1883.
@@ -79,7 +78,7 @@ on port 2025 instead of 1883.
 ### An all together examples
 
 
-`./mqttLocalLogger -t topic/left/right -t topic/right/left  -p 2025 -D BalloonData -l up/down -s .json localhost`
+`./mqttLocalLogger --mqtt-topic topic/left/right --mqtt-topic topic/right/left  --mqtt-port 2025 --log-file-prefix BalloonData --log-dir up/down --log-file-suffix .json --mqtt-hot localhost`
 
 mqttLocalLogger will attempt to connect to the mqtt localhost server on port 2025. It will verify that `./up/down/` is usable and if 
 not will attempt to fix it.  It will verify that `./up/down/topic/left/right` and `./up/down/topic/right/left` are usable and
