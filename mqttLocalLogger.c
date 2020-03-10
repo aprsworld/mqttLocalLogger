@@ -29,6 +29,7 @@
 static int mqtt_port=1883;
 static char mqtt_host[256];
 static char logDir[256]="logLocal";
+static char *mqtt_user_name,*mqtt_passwd;
 static int unitaryLogFile;
 static char logFilePrefix[256];
 static char logFileSuffix[256];
@@ -171,6 +172,9 @@ static int run = 1;
 
 
 void connect_callback(struct mosquitto *mosq, void *obj, int result) {
+	if ( 5 == result ) {
+		fprintf(stderr,"# --mqtt-user-name and --mqtt-passwd required at this site.\n");
+	}
 	printf("# connect_callback, rc=%d\n", result);
 }
 
@@ -275,6 +279,9 @@ static int startup_mosquitto(void) {
 	mosq = mosquitto_new(clientid, true, 0);
 
 	if (mosq) {
+		if ( 0 != mosq,mqtt_user_name && 0 != mqtt_passwd ) {
+			mosquitto_username_pw_set(mosq,mqtt_user_name,mqtt_passwd);
+		}
 		mosquitto_connect_callback_set(mosq, connect_callback);
 		mosquitto_message_callback_set(mosq, message_callback);
 
@@ -315,6 +322,8 @@ enum arguments {
 	A_mqtt_host = 512,
 	A_mqtt_topic,
 	A_mqtt_port,
+	A_mqtt_user_name,
+	A_mqtt_password,
 	A_log_file_prefix,
 	A_log_file_suffix,
 	A_log_dir,
@@ -343,6 +352,8 @@ int main(int argc, char **argv) {
 		        {"mqtt-host",                        1,                 0, A_mqtt_host },
 		        {"mqtt-topic",                       1,                 0, A_mqtt_topic },
 		        {"mqtt-port",                        1,                 0, A_mqtt_port },
+		        {"mqtt-user-name",                   1,                 0, A_mqtt_user_name },
+		        {"mqtt-passwd",                      1,                 0, A_mqtt_password },
 		        {"split-log-file-by-day",            no_argument,       0, A_split_log_file_by_day },
 			{"quiet",                            no_argument,       0, A_quiet, },
 			{"verbose",                          no_argument,       0, A_verbose, },
@@ -369,6 +380,12 @@ int main(int argc, char **argv) {
 				break;
 			case A_mqtt_port:
 				mqtt_port = atoi(optarg);
+				break;
+			case A_mqtt_user_name:
+				mqtt_user_name = strsave(optarg);
+				break;
+			case A_mqtt_password:
+				mqtt_passwd = strsave(optarg);
 				break;
 			case A_log_dir:	
 				strncpy(logDir,optarg,sizeof(logDir));
