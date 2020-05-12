@@ -511,7 +511,7 @@ int next_hertz(struct timeval *real_time, struct timeval *trigger_time ) {
 	if ( 1 == hertz ) {
 		while ( t1 > t2 ) {
 			trigger_time->tv_sec++;
-			//t2 = ((uint64_t)trigger_time->tv_sec * 1000000) + trigger_time->tv_usec;
+			t2 = ((uint64_t)trigger_time->tv_sec * 1000000) + trigger_time->tv_usec;
 		}
 	}
 	else {
@@ -894,7 +894,6 @@ static int _load_configuration(void) {
 
 enum arguments {
 	A_mqtt_host = 512,
-	A_mqtt_topic,
 	A_mqtt_port,
 	A_mqtt_user_name,
 	A_mqtt_password,
@@ -928,7 +927,6 @@ int main(int argc, char **argv) {
 		        {"log-file-prefix",                  1,                 0, A_log_file_prefix },
 		        {"log-file-suffix",                  1,                 0, A_log_file_suffix },
 		        {"mqtt-host",                        1,                 0, A_mqtt_host },
-		        {"mqtt-topic",                       1,                 0, A_mqtt_topic },
 		        {"mqtt-port",                        1,                 0, A_mqtt_port },
 		        {"mqtt-user-name",                   1,                 0, A_mqtt_user_name },
 		        {"mqtt-passwd",                      1,                 0, A_mqtt_password },
@@ -978,9 +976,6 @@ int main(int argc, char **argv) {
 				break;
 			case A_mqtt_host:	
 				strncpy(mqtt_host,optarg,sizeof(mqtt_host));
-				break;
-			case A_mqtt_topic:
-				add_topic(optarg);
 				break;
 			case A_mqtt_port:
 				mqtt_port = atoi(optarg);
@@ -1036,6 +1031,7 @@ int main(int argc, char **argv) {
 		hertz = 0;
 	} else if ( 0 == hertz ) {
 		hertz = 1;
+		fprintf(stderr,"# hertz = 1\n");
 	}
 
 
