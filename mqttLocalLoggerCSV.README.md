@@ -127,6 +127,14 @@ will output the mean m of the elements that occurred for each element pointed to
 
 will output the mean m of the elements that occurred for each element pointed to.
 
+### maximum
+
+will output the largest value that occurred in the period.
+
+### minimum
+
+will output the smallest value that occurred in the period.
+
 ## csvTitle
 
 When the program starts the first line in the csv ouput will look like this:

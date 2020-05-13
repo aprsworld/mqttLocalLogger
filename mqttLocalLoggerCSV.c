@@ -31,6 +31,7 @@
 #include <time.h>
 #include <math.h>
 
+
 #define ALARM_SECONDS 600
 static int run = 1;
 static int mqtt_port=1883;
@@ -196,6 +197,8 @@ enum Outputs {
 	mean,
 	sum,
 	standard_deviation,
+	maximum,
+	minimum,
 };
 typedef struct {
 	enum Outputs value;
@@ -208,6 +211,8 @@ OutputTypes OutputTypesTable[] = {
 	{mean,"mean",},
 	{sum,"sum",},
 	{standard_deviation,"standard_deviation",},
+	{maximum,"maximum",},
+	{minimum,"minimum",},
 	{0,0,},
 };
 
@@ -236,6 +241,7 @@ typedef struct {
 	enum Outputs csvOutputType;
 	int count;
 	double sum;
+	double maximum,minimum;
 	/* internal standard_deviation stuff */
 	double m,s;	/* m is the running mean and s is the running standard_deviation */
 	int n;	/* m, s, and n must be zeroed after each output */
@@ -301,6 +307,14 @@ void updateColumnStats( COLUMN *this_column,  TOPICS *this_topic ) {
 				this_column->n++;
 				this_column->m = ( x - this_column->m) /this_column->n;
 				this_column->s += ( x - this_column->m) * ( x - previous_mean);
+				break;
+			case	maximum:
+				x = atof(json_object_to_json_string_ext(tmp, JSON_C_TO_STRING_PRETTY));
+				this_column->maximum = ( x > this_column->maximum) ? x : this_column->maximum;
+				break;
+			case	minimum:
+				x = atof(json_object_to_json_string_ext(tmp, JSON_C_TO_STRING_PRETTY));
+				this_column->minimum = ( x < this_column->minimum) ? x : this_column->minimum;
 				break;
 				
 		}
@@ -398,6 +412,8 @@ static void column_clear(void) {
 		COLUMN * t = columns + i;
 		t->n = t->count = 0;
 		t->s = t->m = t->sum = 0.0;
+		t->maximum = 0.0 - INFINITY;
+		t->minimum = INFINITY;
 	}
 }	
 
@@ -446,6 +462,20 @@ void outputThisJson( json_object *jobj, COLUMN thisColumn, FILE *out ) {
 		case standard_deviation:
 			snprintf((char *)tmp,sizeof(buffer),"%lf",( 0 == thisColumn.n) ? NAN :
 				pow((thisColumn.s/thisColumn.n),0.5));
+			break;
+		case maximum:
+			if ( ( 0.0 - INFINITY) != thisColumn.maximum ) {
+				snprintf((char *)tmp,sizeof(buffer),"%lf",thisColumn.maximum);
+			} else {
+				tmp = "NULL";
+			}
+			break;
+		case minimum:
+			if ( INFINITY != thisColumn.minimum ) {
+				snprintf((char *)tmp,sizeof(buffer),"%lf",thisColumn.minimum);
+			} else {
+				tmp = "NULL";
+			}
 			break;
 			
 	}
