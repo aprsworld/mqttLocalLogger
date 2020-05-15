@@ -461,7 +461,7 @@ void outputThisJson( json_object *jobj, COLUMN thisColumn, FILE *out ) {
 			break;
 		case standard_deviation:
 			snprintf((char *)tmp,sizeof(buffer),"%lf",( 0 == thisColumn.n) ? NAN :
-				pow((thisColumn.s/thisColumn.n),0.5));
+				sqrt((thisColumn.s/thisColumn.n)));
 			break;
 		case maximum:
 			if ( ( 0.0 - INFINITY) != thisColumn.maximum ) {
