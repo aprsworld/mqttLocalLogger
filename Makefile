@@ -14,7 +14,7 @@ mqttLocalLogger.o: mqttLocalLogger.c
 
 
 mqttLocalLoggerCSV: mqttLocalLoggerCSV.o 
-	$(CC) mqttLocalLoggerCSV.o  -o mqttLocalLoggerCSV $(CFLAGS) $(LDFLAGS) -lm -ljson-c -lmosquitto 
+	$(CC) mqttLocalLoggerCSV.o  -o mqttLocalLoggerCSV $(CFLAGS) $(LDFLAGS) -lm -ljson-c -lmosquitto -lncurses
 
 
 mqttLocalLoggerCSV.o: mqttLocalLoggerCSV.c

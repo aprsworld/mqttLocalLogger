@@ -4,6 +4,7 @@
 
 mqttLocalLoggerCSV subscribes to one or more mqtt topics and logs to one csv file.  
 The configuration files contains information on subscription topics, columns, and methods.
+If the --display-herz is used then data is not logged but is displayed to the screen using ncurses.  
 
 
 ## Installation
@@ -33,6 +34,7 @@ switch|Required/Optional|argument|description
 --mqtt-host|REQUIRED||Is a qualified host or ip address that has moquitto server.
 --hertz|OPTIONAL|integer|Default hertz = 1.
 --millisecond-interval|OPTIONAL|number|Number of mSeconds between output lines.  Not required if --herz used.
+--display-hertz|OPTIONAL|number|Turns off logging and displays to screen formatted
 --log-file-suffix|OPTIONAL|text|end each log filename with suffix ie. ".csv"   default=".csv" 
 --mqtt-port|OPTIONAL|number|default is 1883
 --log-dir|OPTIONAL|path|logging derectory, default="logLocal"
@@ -180,3 +182,35 @@ Will point to a json object and you probably don't want that.
 
 will point to `-65.859031000000002`.   Since this a numeric item you can use all csvOuput including
 `value`, `count`, `sum`, `mean`, and `standard-deviation`.
+
+## csvTitleY, csvTitleX, csvAgerY, csvAgerX, csvOutputY, csvOutputX
+
+### csvTitleY
+
+Is the Y coordinate on the screen.   When --display-hertz is used then this determines the
+row for the csvTitle.
+
+### csvTitleX
+
+Is the X coordinate on the screen.   When --display-hertz is used then this determines the
+column for the csvTitle.
+
+### csvAgerY
+
+Is the Y coordinate on the screen.   When --display-hertz is used then this determines the
+the row to post the data-age in seconds.
+
+### csvAgerX
+
+Is the X coordinate on the screen.   When --display-hertz is used then this determines the
+the cloumn to post the data-age in seconds.
+
+### csvOutputY
+
+Is the Y coordinate on the screen.   When --display-hertz is used then this determines the
+the row to post the csvOutput.
+
+### csvOutputX
+
+Is the X coordinate on the screen.   When --display-hertz is used then this determines the
+the column to post the csvOutput.

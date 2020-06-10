@@ -30,6 +30,7 @@
 #include <mosquitto.h>
 #include <time.h>
 #include <math.h>
+#include <ncurses.h>
 
 
 #define ALARM_SECONDS 600
@@ -45,6 +46,7 @@ static char logFileSuffix[256] = ".csv";
 int outputDebug=0;
 int outputSeparatorCount;
 int hertz = 0;
+int displayHertz;
 int milliseconds;
 int noOutputStdout =0;
 static int splitLogFilesByDay = 1;	
@@ -227,6 +229,14 @@ enum Outputs get_csvOutputType(char *s ) {
 	}
 	return	p->value;
 }
+typedef struct {
+	int count;
+	double sum;
+	double maximum,minimum;
+	/* internal standard_deviation stuff */
+	double m,s;	/* m is the running mean and s is the running standard_deviation */
+	int n;	/* m, s, and n must be zeroed after each output */
+} STATISTICS;
 
 
 typedef struct {
@@ -235,16 +245,16 @@ typedef struct {
 	char *csvTitle;
 	char *mqttTopic;
 	char *jsonPath;
+	int csvOutputY,csvOutputX;	/* y,x coordinates of the data if being displayed */
+	int csvTitleY,csvTitleX;	/* y,x coordinates of the title if being displayed */
+	int csvAgerY,csvAgerX;		/* y,x coordinates of the age-of-data if being displayed */
 	/* internal elements */
+	STATISTICS periodic, continuous;
 	int integerColumn;
 	TOPICS *this_topic;
 	enum Outputs csvOutputType;
-	int count;
-	double sum;
-	double maximum,minimum;
-	/* internal standard_deviation stuff */
-	double m,s;	/* m is the running mean and s is the running standard_deviation */
-	int n;	/* m, s, and n must be zeroed after each output */
+	uint64_t	uLastUpdate;	/* the microtime of the last packet */
+	void *packet;
 } COLUMN;
 
 COLUMN columns[256];
@@ -278,6 +288,7 @@ json_object *parse_a_string(char *string ) {
 	return	jobj;
 }
 void updateColumnStats( COLUMN *this_column,  TOPICS *this_topic ) {
+	this_column->uLastUpdate = microtime();
 	if ( count > this_column->csvOutputType ) {
 		return;	/* no stats for this column */
 	}
@@ -290,31 +301,49 @@ void updateColumnStats( COLUMN *this_column,  TOPICS *this_topic ) {
 	}
 	if ( 0 == rc ) { /* this element exist  so we can stat this element */
 		double x,previous_mean;
+	
 		switch ( this_column->csvOutputType ) {
 			case	count:
-				this_column->count++;
+				this_column->periodic.count++;
+				this_column->continuous.count++;
 				break;
 			case	mean:
-				this_column->count++;
-				this_column->sum += atof(json_object_to_json_string_ext(tmp, JSON_C_TO_STRING_PRETTY));
+				this_column->periodic.count++;
+				this_column->continuous.count++;
+				x = atof(json_object_to_json_string_ext(tmp, JSON_C_TO_STRING_PRETTY));
+				this_column->periodic.sum += x;
+				this_column->continuous.sum += x;
 				break;
 			case	sum:
-				this_column->sum += atof(json_object_to_json_string_ext(tmp, JSON_C_TO_STRING_PRETTY));
+				x = atof(json_object_to_json_string_ext(tmp, JSON_C_TO_STRING_PRETTY));
+				this_column->periodic.sum += x;
+				this_column->continuous.sum += x;
 				break;
 			case	standard_deviation:
 				x = atof(json_object_to_json_string_ext(tmp, JSON_C_TO_STRING_PRETTY));
-				previous_mean = this_column->m;
-				this_column->n++;
-				this_column->m = ( x - this_column->m) /this_column->n;
-				this_column->s += ( x - this_column->m) * ( x - previous_mean);
+				previous_mean = this_column->periodic.m;
+				this_column->periodic.n++;
+				this_column->periodic.m = ( x - this_column->periodic.m) /this_column->periodic.n;
+				this_column->periodic.s += ( x - this_column->periodic.m) * ( x - previous_mean);
+
+				previous_mean = this_column->continuous.m;
+				this_column->continuous.n++;
+				this_column->continuous.m = ( x - this_column->continuous.m) /this_column->continuous.n;
+				this_column->continuous.s += ( x - this_column->continuous.m) * ( x - previous_mean);
 				break;
 			case	maximum:
 				x = atof(json_object_to_json_string_ext(tmp, JSON_C_TO_STRING_PRETTY));
-				this_column->maximum = ( x > this_column->maximum) ? x : this_column->maximum;
+				this_column->periodic.maximum = 
+					( x > this_column->periodic.maximum) ? x : this_column->periodic.maximum;
+				this_column->continuous.maximum = 
+					( x > this_column->continuous.maximum) ? x : this_column->continuous.maximum;
 				break;
 			case	minimum:
 				x = atof(json_object_to_json_string_ext(tmp, JSON_C_TO_STRING_PRETTY));
-				this_column->minimum = ( x < this_column->minimum) ? x : this_column->minimum;
+				this_column->periodic.minimum = 
+					( x < this_column->periodic.minimum) ? x : this_column->periodic.minimum;
+				this_column->continuous.minimum = 
+					( x < this_column->continuous.minimum) ? x : this_column->continuous.minimum;
 				break;
 				
 		}
@@ -330,6 +359,7 @@ int findTopicColumns(char *s, char *packet, int packetlen ) {
 	for ( i = 0; columnsCount > i; i++ ) {
 		if ( 0 == strcmp(columns[i].mqttTopic,s) ) {
 			TOPICS *this_topic = columns[i].this_topic;
+
 			if ( 0 == this_topic ) {
 				fprintf(stderr,"# internal error findTopicColumns\n");
 				exit(1);
@@ -342,8 +372,20 @@ int findTopicColumns(char *s, char *packet, int packetlen ) {
 			if ( 0 != tmp ) {
 				memcpy(tmp,packet,packetlen);
 			}
+			
 			this_topic->packet = tmp;
 			this_topic->packetCount++;;
+
+			if (  columns[i].packet ) {
+				free( columns[i].packet);
+			}
+
+			char *tmp2 = calloc(1,packetlen + 1);
+			if ( 0 != tmp2 ) {
+				memcpy(tmp2,packet,packetlen);
+			}
+			columns[i].packet = tmp2;	/* this is persistent so we can display it */
+
 			updateColumnStats( columns + i,this_topic);
 			rc = false;
 		}
@@ -359,10 +401,16 @@ static void signal_handler(int signum) {
 	if ( SIGALRM == signum ) {
 		fprintf(stderr,"\n# Timeout while waiting for NMEA data.\n");
 		fprintf(stderr,"# Terminating.\n");
+		if ( 0 < displayHertz ) {
+			endwin();
+		}
 		exit(100);
 	} else if ( SIGPIPE == signum ) {
 		fprintf(stderr,"\n# Broken pipe.\n");
 		fprintf(stderr,"# Terminating.\n");
+		if ( 0 < displayHertz ) {
+			endwin();
+		}
 		exit(101);
 	} else if ( SIGUSR1 == signum ) {
 		/* clear signal */
@@ -375,6 +423,9 @@ static void signal_handler(int signum) {
 	} else {
 		fprintf(stderr,"\n# Caught unexpected signal %d.\n",signum);
 		fprintf(stderr,"# Terminating.\n");
+		if ( 0 < displayHertz ) {
+			endwin();
+		}
 		exit(102);
 	}
 
@@ -393,13 +444,6 @@ void connect_callback(struct mosquitto *mosq, void *obj, int result) {
 
 void message_callback(struct mosquitto *mosq, void *obj, const struct mosquitto_message *message) {
 
-#if 0
-	char *debug_topic = getenv("debug_topic");
-
-	if ( 0 != debug_topic && 0 == strcmp(message->topic,debug_topic)) {
-		fprintf(stderr,"# debug_topic found in message_callback\n");
-	}
-#endif
 	if ( findTopicColumns(message->topic, message->payload, message->payloadlen) ) {
 		fprintf(stderr,"# cannot find column topic %s\n",message->topic);
 		exit(0);
@@ -410,10 +454,10 @@ static void column_clear(void) {
 	int i;
 	for ( i = 0; columnsCount > i ; i++ ) {
 		COLUMN * t = columns + i;
-		t->n = t->count = 0;
-		t->s = t->m = t->sum = 0.0;
-		t->maximum = 0.0 - INFINITY;
-		t->minimum = INFINITY;
+		t->periodic.n = t->periodic.count = 0;
+		t->periodic.s = t->periodic.m = t->periodic.sum = 0.0;
+		t->periodic.maximum = 0.0 - INFINITY;
+		t->periodic.minimum = INFINITY;
 	}
 }	
 
@@ -443,36 +487,38 @@ topics_mosquitto_subscribe(p->left,mosq);
 mosquitto_subscribe(mosq, NULL, p->topic, 2);
 topics_mosquitto_subscribe(p->right,mosq);
 }
-void outputThisJson( json_object *jobj, COLUMN thisColumn, FILE *out ) {
+void outputThisJson( json_object *jobj, COLUMN thisColumn, FILE *out, int displayFlag ) {
 	char buffer[64] = {};
 	const char *tmp = buffer;
+	STATISTICS t = (0 == displayFlag) ? thisColumn.periodic : thisColumn.continuous;
+
 	switch ( thisColumn.csvOutputType ) {	
 		case value:
 			tmp = json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY);
 			break;
 		case count:
-			snprintf((char *)tmp,sizeof(buffer),"%d",thisColumn.count);
+			snprintf((char *)tmp,sizeof(buffer),"%d",t.count);
 			break;
 		case mean:
-			snprintf((char *)tmp,sizeof(buffer),"%lf",thisColumn.sum/thisColumn.count);
+			snprintf((char *)tmp,sizeof(buffer),"%lf",t.sum/t.count);
 			break;
 		case sum:
-			snprintf((char *)tmp,sizeof(buffer),"%lf",thisColumn.sum);
+			snprintf((char *)tmp,sizeof(buffer),"%lf",t.sum);
 			break;
 		case standard_deviation:
-			snprintf((char *)tmp,sizeof(buffer),"%lf",( 0 == thisColumn.n) ? NAN :
-				sqrt((thisColumn.s/thisColumn.n)));
+			snprintf((char *)tmp,sizeof(buffer),"%lf",( 0 == t.n) ? NAN :
+				sqrt((t.s/t.n)));
 			break;
 		case maximum:
-			if ( ( 0.0 - INFINITY) != thisColumn.maximum ) {
-				snprintf((char *)tmp,sizeof(buffer),"%lf",thisColumn.maximum);
+			if ( ( 0.0 - INFINITY) != t.maximum ) {
+				snprintf((char *)tmp,sizeof(buffer),"%lf",t.maximum);
 			} else {
 				tmp = "NULL";
 			}
 			break;
 		case minimum:
-			if ( INFINITY != thisColumn.minimum ) {
-				snprintf((char *)tmp,sizeof(buffer),"%lf",thisColumn.minimum);
+			if ( INFINITY != t.minimum ) {
+				snprintf((char *)tmp,sizeof(buffer),"%lf",t.minimum);
 			} else {
 				tmp = "NULL";
 			}
@@ -484,6 +530,9 @@ void outputThisJson( json_object *jobj, COLUMN thisColumn, FILE *out ) {
 	}
 	if ( 0 != out ) {
 		fprintf(out,"%s,",tmp);
+	}
+	if ( 0 != displayFlag ) {
+		mvaddstr(thisColumn.csvOutputY,thisColumn.csvOutputX,tmp);
 	}
 	
 }
@@ -512,10 +561,46 @@ int outputThisColumn( int idx, FILE *out ) {
 		
 	
 
-	outputThisJson(tmp,thisColumn,out);
+	outputThisJson(tmp,thisColumn,out,0);
 	outputSeparatorCount = thisColumn.integerColumn;
 	
 return	0;
+}
+int next_displayHertz(struct timeval *real_time, struct timeval *trigger_time ) {
+	static uint64_t hertz_interval ;
+
+	if ( 0 == hertz_interval ) {
+		hertz_interval =  ((uint64_t)1000000/displayHertz);
+	}
+
+
+	if ( 0  == trigger_time->tv_sec ) {
+		trigger_time->tv_sec = real_time->tv_sec +1;	/* start at the next second */
+		trigger_time->tv_usec = 0;
+		return true;
+	}
+	
+	uint64_t t1,t2;
+	t1 = ((uint64_t)real_time->tv_sec * 1000000) + real_time->tv_usec;
+	t2 = ((uint64_t)trigger_time->tv_sec * 1000000) + trigger_time->tv_usec;
+	if ( t1 < t2 ) {
+		return	true;
+	}
+	/*   we are triggered */
+	if ( 1 == displayHertz ) {
+		while ( t1 > t2 ) {
+			trigger_time->tv_sec++;
+			t2 = ((uint64_t)trigger_time->tv_sec * 1000000) + trigger_time->tv_usec;
+		}
+	}
+	else {
+		t2 += hertz_interval;
+		trigger_time->tv_sec = t2 / 1000000;
+		trigger_time->tv_usec = t2 % 1000000;
+	}
+		
+	return	false;	/* we have been triggered. */	
+
 }
 int next_hertz(struct timeval *real_time, struct timeval *trigger_time ) {
 	static uint64_t hertz_interval ;
@@ -634,6 +719,57 @@ static int _outputHeaders(void) {
 
 return	false;
 }
+static void display_this_column( COLUMN *this_column ) {
+
+	if ( 0 <= this_column->csvTitleY && 0 <= this_column->csvTitleX ) {
+		mvaddstr(this_column->csvTitleY,this_column->csvTitleX,this_column->csvTitle);
+	}
+
+	if ( 0 <= this_column->csvOutputY && 0 <= this_column->csvOutputX ) {
+		if ( 0 == this_column->this_topic->jobj && 0 != this_column->packet ) {
+			this_column->this_topic->jobj = parse_a_string(this_column->packet);
+		}
+		json_object *tmp = NULL;
+		int rc = -1;
+		if ( 0 != this_column->this_topic->jobj ) {
+			rc = json_pointer_get(this_column->this_topic->jobj,this_column->jsonPath,&tmp);
+		}
+		if ( 0 == rc ) {
+			outputThisJson(tmp,*this_column,0,1);
+		}
+	}
+
+	if ( 0 <= this_column->csvAgerY && 0 <= this_column->csvAgerX ) {
+		char buffer[32];
+		uint64_t latency =  microtime() - this_column->uLastUpdate;
+		// fprintf(stderr,"# latency %12ld",latency);
+		latency /= 1000;	/* convert to msec */
+		snprintf(buffer,sizeof(buffer),"%3ld.%03ld s",latency/1000, latency % 1000);
+		mvaddstr(this_column->csvAgerY,this_column->csvAgerX,buffer);
+		// fprintf(stderr,"   %s\n",buffer);
+		refresh();
+	}
+
+}
+void do_display(void) {
+	int i;
+	struct timeval time;
+
+        gettimeofday(&time, NULL);
+
+	if ( 0 < displayHertz ) {
+		static struct timeval hertz_tv;
+		if ( next_displayHertz(&time,&hertz_tv) ) {
+			return;
+		}	
+	}
+	/* if here we are going to update display */
+	for ( i = 0; columnsCount > i; i++ ) {
+		display_this_column(columns + i );
+	}
+	refresh();
+
+}
 int do_csvOutput(void) {
 	int i;
 	char timestamp[64];
@@ -721,6 +857,9 @@ static int startup_mosquitto(void) {
 		rc = mosquitto_connect(mosq, mqtt_host, mqtt_port, 60);
 
 		topics_mosquitto_subscribe(topic_root,mosq);
+		if ( displayHertz ) {
+			initscr();
+		}
 
 		while (run) {
 			static int whileCount;
@@ -733,7 +872,11 @@ static int startup_mosquitto(void) {
 
 			if ( MOSQ_ERR_SUCCESS == rc ) {
 				uint64_t latency = (uint64_t) 0 - microtime();
-				do_csvOutput();
+				if ( 0 < displayHertz ) {
+					do_display();
+				} else {
+					do_csvOutput();
+				}
 				if ( outputDebug ) {
 					latency += microtime();
 					fprintf(stderr,"# do_csvOutput() latency %ld\n",latency);
@@ -857,6 +1000,31 @@ int load_column( json_object *jobj, int i ) {
 	if ( 0 != outputDebug ) {
 		fprintf(stderr,"# this_topic->topic=%s\n",this_column.this_topic->topic);
 	}
+	/* now process the optional display configuration */
+	this_column.csvTitleY = this_column.csvTitleX = this_column.csvOutputY = this_column.csvOutputX = 
+		this_column.csvAgerY = this_column.csvAgerX =  -1;
+
+	if ( 0 != json_object_object_get_ex(jobj,"csvTitleX",&tmp)) {
+                this_column.csvTitleX = json_object_get_int(tmp);
+        }
+	if ( 0 != json_object_object_get_ex(jobj,"csvTitleY",&tmp)) {
+                this_column.csvTitleY = json_object_get_int(tmp);
+        }
+	if ( 0 != json_object_object_get_ex(jobj,"csvOutputX",&tmp)) {
+                this_column.csvOutputX = json_object_get_int(tmp);
+        }
+	if ( 0 != json_object_object_get_ex(jobj,"csvOutputY",&tmp)) {
+                this_column.csvOutputY = json_object_get_int(tmp);
+        }
+	if ( 0 != json_object_object_get_ex(jobj,"csvAgerX",&tmp)) {
+                this_column.csvAgerX = json_object_get_int(tmp);
+        }
+	if ( 0 != json_object_object_get_ex(jobj,"csvAgerY",&tmp)) {
+                this_column.csvAgerY = json_object_get_int(tmp);
+        }
+	this_column.periodic.maximum = this_column.continuous.maximum = 0.0 - INFINITY;
+	this_column.periodic.minimum = this_column.continuous.minimum = INFINITY;
+
 	columns[i] = this_column;
 	columnsCount++;
 
@@ -929,6 +1097,7 @@ enum arguments {
 	A_mqtt_password,
 	A_configuration,
 	A_hertz,
+	A_display_hertz,
 	A_millisecond_interval,
 	A_log_dir,
 	A_unitary_log_file,
@@ -962,6 +1131,7 @@ int main(int argc, char **argv) {
 		        {"mqtt-passwd",                      1,                 0, A_mqtt_password },
 		        {"configuration",                    1,                 0, A_configuration },
 		        {"hertz",                            1,                 0, A_hertz },
+		        {"display-hertz",                    1,                 0, A_display_hertz, },
 		        {"millisecond-interval",             1,                 0, A_millisecond_interval },
 			{"quiet",                            no_argument,       0, A_quiet, },
 			{"verbose",                          no_argument,       0, A_verbose, },
@@ -1001,6 +1171,12 @@ int main(int argc, char **argv) {
 				hertz = atoi(optarg);
 				fprintf(stderr,"# %d hertz\n",hertz);
 				break;
+			case A_display_hertz:	
+				displayHertz = atoi(optarg);
+				fprintf(stderr,"# %d display-ertz\n",displayHertz);
+				noOutputStdout=1;
+				fprintf(stderr,"# quiet no output to stdout\n");
+				break;
 			case A_configuration:	
 				strncpy(configuration,optarg,sizeof(configuration));
 				break;
@@ -1028,12 +1204,14 @@ int main(int argc, char **argv) {
 				fprintf(stderr,"# quiet no output to stdout\n");
 				break;
 			case A_help:
+				fprintf(stdout,"# --configuration\t\tjson columns\tREQUIRED\n");
 				fprintf(stdout,"# --mqtt-host\t\t\tmqtt-host is required\tREQUIRED\n");
 				fprintf(stdout,"# --mqtt-topic\t\t\tmqtt topic must be used at least once\n");
 				fprintf(stdout,"# --mqtt-port\t\t\tmqtt port\t\tOPTIONAL\n");
 				fprintf(stdout,"# --log-dir\t\t\tlogging directory, default=logLocal\n");
-				fprintf(stdout,"# --hertz\t\t\tfrequency of reporting default = 1\n");
-				fprintf(stdout,"# --millisconed-interval\t\t\tfrequency of reporting excludes hertz\n");
+				fprintf(stdout,"# --hertz\t\t\tfrequency of logging. default = 1\n");
+				fprintf(stdout,"# --millisconed-interval\tfrequency of logging excludes hertz\n");
+				fprintf(stdout,"# --display-hertz\t\tfrequency of screen update. default = off\n");
 				fprintf(stdout,"#\n");
 				fprintf(stdout,"# --help\t\t\tThis help message then exit\n");
 				fprintf(stdout,"#\n");
@@ -1081,6 +1259,9 @@ int main(int argc, char **argv) {
 	rc = startup_mosquitto();
 	
 
+	if ( displayHertz ) {
+		endwin();
+	}
 
 	return	rc;
 }
