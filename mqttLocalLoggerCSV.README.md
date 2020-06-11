@@ -111,31 +111,39 @@ Determines the type of output.
 
 ### value
 
-will output whatever the elements that is pointed to.
+will output as a string, whatever the elements that is pointed to.
+
+### value_integer
+
+will output as a integer, whatever the elements that is pointed to.
+
+### value_double
+
+will output as a double, whatever the elements that is pointed to.
 
 ### count
 
-will output the number of times the element that was pointed to occurred.
+will output as an integer, the number of times the element that was pointed to occurred.
 
 ### sum
 
-will output the sum of the elements that occurred for each element pointed to.   ie.  5 5 5   putputs 15.
+will output  as a double the sum of the elements that occurred for each element pointed to.   ie.  5 5 5   putputs 15.000
 
 ### mean
 
-will output the mean m of the elements that occurred for each element pointed to.   ie. 4 5 6 outputs 15.
+will output as a double the mean of the elements that occurred for each element pointed to.   ie. 4 5 6 outputs 5.000
 
 ### standard-deviation 
 
-will output the mean m of the elements that occurred for each element pointed to.
+will output as a double the standard deviation of the elements that occurred for each element pointed to.
 
 ### maximum
 
-will output the largest value that occurred in the period.
+will output as at double, the largest value that occurred in the period.
 
 ### minimum
 
-will output the smallest value that occurred in the period.
+will output as a double, the smallest value that occurred in the period.
 
 ## csvTitle
 
@@ -148,11 +156,14 @@ combining `DATE` with column B csvTitle and column C csvTitle.
 
 ## mqttTopic
 
-This must contain the exact topic desired.   These are not required to be uniform or unique.   Any valid topic is allowe
+This must contain the exact topic desired.   These are not required to be uniform or unique.   Any valid topic is allowed
 but remember it must be available on the host or no usable data will be output.
 
 
 ## jsonPath
+
+The jsonPath is required but maybe empty if you are using csvOutputFormat as a literal and the csvColumn is also
+empty.
 
 This must conform to RFC 6901.   I will explain the basic using the example below:
 ```
@@ -214,3 +225,14 @@ the row to post the csvOutput.
 
 Is the X coordinate on the screen.   When --display-hertz is used then this determines the
 the column to post the csvOutput.
+
+## csvOutputFormat
+
+Will apply a printf like formatting to the data in the column.   This format will pertain to data displayed on a screen
+or written to the CSV logfile.   Typical formats might be `"%8.8s"`, `"%06d"``,`"%9.2lf"`, etc.
+
+If you use a format `"$%3.2lf"` and you do not want the `$` to show in the csv file then you must create a column entry where
+csvColumn=`""`, and the format to be `"$"`.   Then use "%9.2lf"`  in the entry that has a non-empty csvColumn.
+
+Simply put anything that is to be excluded from the csv file must have an empty csvColumn and may have an empty jsonPath.
+

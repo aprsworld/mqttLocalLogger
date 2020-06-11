@@ -192,10 +192,12 @@ uint64_t microtime() {
 
 enum Outputs {
 	/* 1-99 are operations that do not require building a json_object from the packet */
-	value = 1,
+	value = 1,	/* this is only formatable as a string */
 
 	/* 100 and above required  require building a json_object from the packet */
 	count = 100,
+	value_integer,
+	value_double,
 	mean,
 	sum,
 	standard_deviation,
@@ -210,6 +212,8 @@ typedef struct {
 OutputTypes OutputTypesTable[] = {
 	{value,"value",},
 	{count,"count",},
+	{value_integer,"value_integer",},
+	{value_double,"value_double",},
 	{mean,"mean",},
 	{sum,"sum",},
 	{standard_deviation,"standard_deviation",},
@@ -245,6 +249,7 @@ typedef struct {
 	char *csvTitle;
 	char *mqttTopic;
 	char *jsonPath;
+	char *csvOutputFormat;	/* optional used by snprintf */
 	int csvOutputY,csvOutputX;	/* y,x coordinates of the data if being displayed */
 	int csvTitleY,csvTitleX;	/* y,x coordinates of the title if being displayed */
 	int csvAgerY,csvAgerX;		/* y,x coordinates of the age-of-data if being displayed */
@@ -480,64 +485,86 @@ void clear_all_outputs(void) {
 	output_clear(topic_root);
 	column_clear();
 }
-void topics_mosquitto_subscribe(TOPICS *p, struct mosquitto *mosq)
-{
-if ( 0 == p )	return;
-topics_mosquitto_subscribe(p->left,mosq);
-mosquitto_subscribe(mosq, NULL, p->topic, 2);
-topics_mosquitto_subscribe(p->right,mosq);
+void topics_mosquitto_subscribe(TOPICS *p, struct mosquitto *mosq) {
+	if ( 0 == p ){
+		return;
+	}
+	topics_mosquitto_subscribe(p->left,mosq);
+	if ( 0 != p->topic[0] ) {
+		mosquitto_subscribe(mosq, NULL, p->topic, 2);
+	}
+	topics_mosquitto_subscribe(p->right,mosq);
 }
 void outputThisJson( json_object *jobj, COLUMN thisColumn, FILE *out, int displayFlag ) {
-	char buffer[64] = {};
-	const char *tmp = buffer;
+	char buffer[256] = {};
+	char *fmt = (char *)thisColumn.csvOutputFormat;
 	STATISTICS t = (0 == displayFlag) ? thisColumn.periodic : thisColumn.continuous;
 
 	switch ( thisColumn.csvOutputType ) {	
 		case value:
-			tmp = json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY);
+			fmt = ( 0 != fmt ) ? fmt : "%s";
+			snprintf(buffer,sizeof(buffer),fmt, json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY));
+			break;
+		case value_integer:
+			fmt = ( 0 != fmt ) ? fmt : "%d";
+			snprintf(buffer,sizeof(buffer),fmt, atoi(json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY)));
+			break;
+		case value_double:
+			fmt = ( 0 != fmt ) ? fmt : "%lf";
+			snprintf(buffer,sizeof(buffer),fmt, atof(json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY)));
 			break;
 		case count:
-			snprintf((char *)tmp,sizeof(buffer),"%d",t.count);
+			fmt = ( 0 != fmt ) ? fmt : "%d";
+			snprintf(buffer,sizeof(buffer),fmt,t.count);
 			break;
 		case mean:
-			snprintf((char *)tmp,sizeof(buffer),"%lf",t.sum/t.count);
+			fmt = ( 0 != fmt ) ? fmt : "%lf";
+			snprintf(buffer,sizeof(buffer),fmt,t.sum/t.count);
 			break;
 		case sum:
-			snprintf((char *)tmp,sizeof(buffer),"%lf",t.sum);
+			fmt = ( 0 != fmt ) ? fmt : "%lf";
+			snprintf(buffer,sizeof(buffer),fmt,t.sum);
 			break;
 		case standard_deviation:
-			snprintf((char *)tmp,sizeof(buffer),"%lf",( 0 == t.n) ? NAN :
+			fmt = ( 0 != fmt ) ? fmt : "%lf";
+			snprintf(buffer,sizeof(buffer),fmt,( 0 == t.n) ? NAN :
 				sqrt((t.s/t.n)));
 			break;
 		case maximum:
+			fmt = ( 0 != fmt ) ? fmt : "%lf";
 			if ( ( 0.0 - INFINITY) != t.maximum ) {
-				snprintf((char *)tmp,sizeof(buffer),"%lf",t.maximum);
+				snprintf(buffer,sizeof(buffer),fmt,t.maximum);
 			} else {
-				tmp = "NULL";
+				strncmp(buffer,"NULL",sizeof(buffer));
 			}
 			break;
 		case minimum:
+			fmt = ( 0 != fmt ) ? fmt : "%lf";
 			if ( INFINITY != t.minimum ) {
-				snprintf((char *)tmp,sizeof(buffer),"%lf",t.minimum);
+				snprintf(buffer,sizeof(buffer),fmt,t.minimum);
 			} else {
-				tmp = "NULL";
+				strncmp(buffer,"NULL",sizeof(buffer));
 			}
 			break;
 			
 	}
 	if ( 0 == noOutputStdout ) {
-		fprintf(stdout,"%s,",tmp);
+		fprintf(stdout,"%s,",buffer);
 	}
 	if ( 0 != out ) {
-		fprintf(out,"%s,",tmp);
+		fprintf(out,"%s,",buffer);
 	}
 	if ( 0 != displayFlag ) {
-		mvaddstr(thisColumn.csvOutputY,thisColumn.csvOutputX,tmp);
+		mvaddstr(thisColumn.csvOutputY,thisColumn.csvOutputX,buffer);
 	}
 	
 }
 int outputThisColumn( int idx, FILE *out ) {
 	COLUMN thisColumn = columns[idx];
+
+	if ( 0 == thisColumn.csvColumn[0] ) {
+		return	0;
+	}
 
 	if ( 0 == thisColumn.this_topic->jobj && 0 != thisColumn.this_topic->packet ) {
 		thisColumn.this_topic->jobj = parse_a_string(thisColumn.this_topic->packet);
@@ -672,6 +699,10 @@ int next_msec(struct timeval *real_time, struct timeval *trigger_time ) {
 int outputThisColumnHeader( int idx, FILE *out ) {
 	COLUMN thisColumn = columns[idx];
 
+	if ( 0 == thisColumn.csvColumn[0] ) {
+		return	0;
+	}
+
 
 	int i = outputSeparatorCount + 1;
 	for ( ; thisColumn.integerColumn > i; i++ ) {
@@ -696,6 +727,7 @@ return	0;
 static int _outputHeaders(void) {
 	int i;
 	FILE *out = _openLogfile();
+
 	if ( 0 == noOutputStdout ) {
 		fputs("DATE,",stdout);
 	}
@@ -742,12 +774,9 @@ static void display_this_column( COLUMN *this_column ) {
 	if ( 0 <= this_column->csvAgerY && 0 <= this_column->csvAgerX ) {
 		char buffer[32];
 		uint64_t latency =  microtime() - this_column->uLastUpdate;
-		// fprintf(stderr,"# latency %12ld",latency);
 		latency /= 1000;	/* convert to msec */
 		snprintf(buffer,sizeof(buffer),"%3ld.%03ld s",latency/1000, latency % 1000);
 		mvaddstr(this_column->csvAgerY,this_column->csvAgerX,buffer);
-		// fprintf(stderr,"   %s\n",buffer);
-		refresh();
 	}
 
 }
@@ -847,6 +876,8 @@ static int startup_mosquitto(void) {
 	mosq = mosquitto_new(clientid, true, 0);
 
 	if (mosq) {
+		int loop_interval;
+
 		if ( 0 != mosq,mqtt_user_name && 0 != mqtt_passwd ) {
 			mosquitto_username_pw_set(mosq,mqtt_user_name,mqtt_passwd);
 		}
@@ -859,12 +890,23 @@ static int startup_mosquitto(void) {
 		topics_mosquitto_subscribe(topic_root,mosq);
 		if ( displayHertz ) {
 			initscr();
+			curs_set(0);	/* make cursor invisible */
+			// curs_set(1);	/* make cursor visible  for debugging */
 		}
+
+		if (  0 < displayHertz) {
+			loop_interval = (1000/displayHertz) >> 1;
+		} else if ( 0 < hertz ) {
+			loop_interval = (1000/hertz) >> 1;
+		} else {
+			loop_interval = 500;
+		}
+
 
 		while (run) {
 			static int whileCount;
 			uint64_t latency = (uint64_t) 0 - microtime();
-			rc = mosquitto_loop(mosq, -1, 1);
+			rc = mosquitto_loop(mosq, loop_interval, 1);
 			if ( outputDebug ) {
 				latency += microtime();
 				fprintf(stderr,"# mosquitto_loop() latency %ld %d\n",latency,++whileCount);
@@ -933,7 +975,11 @@ char *load_file(char *fname) {
 }
 static int _integerColumn(COLUMN this_column ) {
 	int i;
+	static int big = 0x08ff;
 
+	if ( 0 == this_column.csvColumn[0] ) {
+		return	big--;
+	}
 	i = this_column.csvColumn[0] -'A' + 1;
 	if ( isalpha(this_column.csvColumn[1] )) {
 		i *= 26;
@@ -1021,6 +1067,9 @@ int load_column( json_object *jobj, int i ) {
         }
 	if ( 0 != json_object_object_get_ex(jobj,"csvAgerY",&tmp)) {
                 this_column.csvAgerY = json_object_get_int(tmp);
+        }
+	if ( 0 != json_object_object_get_ex(jobj,"csvOutputFormat",&tmp)) {
+                this_column.csvOutputFormat = strsave((char *) json_object_get_string(tmp));
         }
 	this_column.periodic.maximum = this_column.continuous.maximum = 0.0 - INFINITY;
 	this_column.periodic.minimum = this_column.continuous.minimum = INFINITY;
