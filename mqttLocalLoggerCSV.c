@@ -495,11 +495,40 @@ void topics_mosquitto_subscribe(TOPICS *p, struct mosquitto *mosq) {
 	}
 	topics_mosquitto_subscribe(p->right,mosq);
 }
+struct sigaction new_action, old_action;
+COLUMN fault_column;
+
+static void sigsegv_handler(int sig, siginfo_t *si, void *unused) {
+	endwin();
+
+	if ( 0 != fault_column.csvOutputFormat ) {
+		fprintf(stderr,"# Got SIGSEGV applying \"%s\"\n",fault_column.csvOutputFormat);
+		fprintf(stderr,"# to Column \"%s\"\n",fault_column.csvColumn);
+	}
+	fprintf(stderr,"# Got SIGSEGV at address: 0x%lx\n",
+		(long) si->si_addr);
+	exit(EXIT_FAILURE);
+}
+void set_sigsegv(COLUMN thisColumn ) {
+	fault_column = thisColumn;
+
+	/* Set up the structure to specify the new action. */
+	new_action.sa_handler = sigsegv_handler;
+	sigemptyset (&new_action.sa_mask);
+	new_action.sa_flags = 0;
+
+	sigaction (SIGSEGV, NULL, &old_action);
+	sigaction (SIGSEGV, &new_action, NULL);
+}
+void unset_sigsegv( void ) {
+	sigaction (SIGSEGV, &old_action, NULL);
+}
 void outputThisJson( json_object *jobj, COLUMN thisColumn, FILE *out, int displayFlag ) {
 	char buffer[256] = {};
 	char *fmt = (char *)thisColumn.csvOutputFormat;
 	STATISTICS t = (0 == displayFlag) ? thisColumn.periodic : thisColumn.continuous;
 
+	set_sigsegv(thisColumn);
 	switch ( thisColumn.csvOutputType ) {	
 		case value:
 			fmt = ( 0 != fmt ) ? fmt : "%s";
@@ -548,6 +577,8 @@ void outputThisJson( json_object *jobj, COLUMN thisColumn, FILE *out, int displa
 			break;
 			
 	}
+	unset_sigsegv();
+	
 	if ( 0 == noOutputStdout ) {
 		fprintf(stdout,"%s,",buffer);
 	}
