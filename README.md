@@ -85,4 +85,17 @@ not will attempt to fix it.  It will verify that `./up/down/topic/left/right` an
 attempt to fix any problems.  When data comes in depending on which topic the data will be written to the files 
 `./up/down/topic/left/right/BalloonData.json` or `./up/down/topic/right/left/BalloonData.json`.
 
- 
+## mqttLocalLoggerCSV
+
+Logs CSV to the logfile from the incoming json.
+See [mqttLocalLoggerCSV.README.md](mqttLocalLoggerCSV.README.md) for details.
+
+## test_jsonPath
+
+Returns the json pointed to by jsonPath from the original json object.
+See [test_jsonPath.README.md](test_jsonPath.README.md) for details.
+
+## feedValuesToMQTT
+
+Takes a column of raw data and turns them into json mqtt packets.
+See [feedValuesToMQTT.README.md](feedValuesToMQTT.README.md) for details.
