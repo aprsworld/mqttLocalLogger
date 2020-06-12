@@ -260,6 +260,7 @@ typedef struct {
 	enum Outputs csvOutputType;
 	uint64_t	uLastUpdate;	/* the microtime of the last packet */
 	void *packet;
+	int alreadyDisplayed;
 } COLUMN;
 
 COLUMN columns[256];
@@ -294,6 +295,7 @@ json_object *parse_a_string(char *string ) {
 }
 void updateColumnStats( COLUMN *this_column,  TOPICS *this_topic ) {
 	this_column->uLastUpdate = microtime();
+	this_column->alreadyDisplayed = 0;
 	if ( count > this_column->csvOutputType ) {
 		return;	/* no stats for this column */
 	}
@@ -793,11 +795,11 @@ return	false;
 }
 static void display_this_column( COLUMN *this_column ) {
 
-	if ( 0 <= this_column->csvTitleY && 0 <= this_column->csvTitleX ) {
+	if ( 0 <= this_column->csvTitleY && 0 <= this_column->csvTitleX  && 0 == this_column->alreadyDisplayed ) {
 		mvaddstr(this_column->csvTitleY,this_column->csvTitleX,this_column->csvTitle);
 	}
 
-	if ( 0 <= this_column->csvOutputY && 0 <= this_column->csvOutputX ) {
+	if ( 0 <= this_column->csvOutputY && 0 <= this_column->csvOutputX  && 0 == this_column->alreadyDisplayed ) {
 		if ( 0 == this_column->this_topic->jobj && 0 != this_column->packet ) {
 			this_column->this_topic->jobj = parse_a_string(this_column->packet);
 		}
@@ -808,6 +810,7 @@ static void display_this_column( COLUMN *this_column ) {
 		}
 		if ( 0 == rc ) {
 			outputThisJson(tmp,*this_column,0,1);
+			this_column->alreadyDisplayed++;
 		}
 	}
 
