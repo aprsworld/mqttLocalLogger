@@ -529,18 +529,27 @@ void outputThisJson( json_object *jobj, COLUMN thisColumn, FILE *out, int displa
 	STATISTICS t = (0 == displayFlag) ? thisColumn.periodic : thisColumn.continuous;
 
 	set_sigsegv(thisColumn);
+	const char *tmp = json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY);
+	int nullFlag = ( 0 == strcmp(tmp,"null"));
+	
 	switch ( thisColumn.csvOutputType ) {	
 		case value:
-			fmt = ( 0 != fmt ) ? fmt : "%s";
-			snprintf(buffer,sizeof(buffer),fmt, json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY));
+			if ( 0 == nullFlag ) {
+				fmt = ( 0 != fmt ) ? fmt : "%s";
+				snprintf(buffer,sizeof(buffer),fmt, tmp);
+			}
 			break;
 		case value_integer:
-			fmt = ( 0 != fmt ) ? fmt : "%d";
-			snprintf(buffer,sizeof(buffer),fmt, atoi(json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY)));
+			if ( 0 == nullFlag ) {
+				fmt = ( 0 != fmt ) ? fmt : "%d";
+				snprintf(buffer,sizeof(buffer),fmt, atoi(tmp));
+			}
 			break;
 		case value_double:
-			fmt = ( 0 != fmt ) ? fmt : "%lf";
-			snprintf(buffer,sizeof(buffer),fmt, atof(json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY)));
+			if ( 0 == nullFlag ) {
+				fmt = ( 0 != fmt ) ? fmt : "%lf";
+				snprintf(buffer,sizeof(buffer),fmt, atof(tmp));
+			}
 			break;
 		case count:
 			fmt = ( 0 != fmt ) ? fmt : "%d";
@@ -1290,7 +1299,7 @@ int main(int argc, char **argv) {
 				fprintf(stdout,"# --mqtt-port\t\t\tmqtt port\t\tOPTIONAL\n");
 				fprintf(stdout,"# --log-dir\t\t\tlogging directory, default=logLocal\n");
 				fprintf(stdout,"# --hertz\t\t\tfrequency of logging. default = 1\n");
-				fprintf(stdout,"# --millisconed-interval\tfrequency of logging excludes hertz\n");
+				fprintf(stdout,"# --millisecond-interval\tfrequency of logging excludes hertz\n");
 				fprintf(stdout,"# --display-hertz\t\tfrequency of screen update. default = off\n");
 				fprintf(stdout,"#\n");
 				fprintf(stdout,"# --help\t\t\tThis help message then exit\n");
