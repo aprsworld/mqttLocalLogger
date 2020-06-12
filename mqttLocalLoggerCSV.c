@@ -498,7 +498,7 @@ void topics_mosquitto_subscribe(TOPICS *p, struct mosquitto *mosq) {
 struct sigaction new_action, old_action;
 COLUMN fault_column;
 
-static void sigsegv_handler(int sig, siginfo_t *si, void *unused) {
+void sigsegv_handler(int sig, siginfo_t *si, void *unused) {
 	endwin();
 
 	if ( 0 != fault_column.csvOutputFormat ) {
@@ -513,7 +513,7 @@ void set_sigsegv(COLUMN thisColumn ) {
 	fault_column = thisColumn;
 
 	/* Set up the structure to specify the new action. */
-	new_action.sa_handler = sigsegv_handler;
+	new_action.sa_sigaction = sigsegv_handler;
 	sigemptyset (&new_action.sa_mask);
 	new_action.sa_flags = 0;
 
