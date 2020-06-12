@@ -236,3 +236,6 @@ csvColumn=`""`, and the format to be `"$"`.   Then use "%9.2lf"`  in the entry t
 
 Simply put anything that is to be excluded from the csv file must have an empty csvColumn and may have an empty jsonPath.
 
+## Sample Configurations
+
+See [mqttLocalLogger.example.conf/README.md](mqttLocalLogger.example.conf/README.md) for details.
