@@ -64,11 +64,11 @@ order, as the program sorts them before acting.
         "csvOutput": "sum",
         "csvOutput": "value",
         "csvOutput": "value_double",
-        "csvOutput": "value_int",
+        "csvOutput": "value_integer",
 ```
 
 We now support three instances of value.   If jsonPath points to a floating point number then use `value_double`.  If
-sonPath points to a signed or unsigned integer then use `value_int`.   Anything else use `value`.
+jsonPath points to a signed or unsigned integer then use `value_integer`.   Anything else use `value`.
 
 `count` returns an unsigned integer.  `mean`, `standard_deviation`, `sum`, `maximum`, `minimum` all return double.
 
@@ -80,15 +80,15 @@ time mqttLocalLoggerCSV is started a new header is written.
 
 ## mqttLocalLoggerCSV.example.conf
 
-`GrandSlam.conf` uses a subset of the configuration rules that pertain only to the writting of the csv file.  mqttLocalLoggerCSV.example.conf has configuration rules that pertain to displaying results on the screen is real time.  Here is the new stuff.
+`GrandSlam.conf` uses a subset of the configuration rules that pertain only to the writting of the csv file.  mqttLocalLoggerCSV.example.conf has configuration rules that pertain to displaying results on the screen in real time.  Here is the new stuff.
 
 ### csvOutputFormat
 
 `csvOutputFormat` is completely optional.  It basically has two uses.  First it can limit the rediculous long output of json and it can
 write labels to the screen.  if the `csvColumn` is not empty then data will be written to the csv file using that format.
-if `csvColumn` is emptry then the format will not be used write to the csv file but will be used to format to the display screen.
+if `csvColumn` is emptry then the format will not be used to write to the csv file but will be used to format to the display screen.
 
-To truncate or write data to a particular format 
+To truncate or write data to these particular formats or create one of your own 
 ```
 	"csvOutputFormat": "%5.2lf",
 	"csvOutputFormat": "%6.3lf",
