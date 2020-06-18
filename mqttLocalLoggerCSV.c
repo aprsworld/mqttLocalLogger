@@ -823,6 +823,30 @@ static void display_this_column( COLUMN *this_column ) {
 	}
 
 }
+void display_this_column_label( COLUMN *this_column ) {
+	if (  0 > this_column->csvOutputY || 0 > this_column->csvOutputX || 0 == this_column->csvOutputFormat ) {
+		return;
+	}
+	char	fmt[256] = {};
+	strcpy(fmt,this_column->csvOutputFormat);
+
+	
+	char *p = strchr(fmt,'%');
+	if ( 0 != p ) {
+		p[0] = '\0';
+	}
+	mvaddstr(this_column->csvOutputY,this_column->csvOutputX,fmt);
+
+
+
+}
+void do_display_labels(void) {
+	int i;
+	for ( i = 0; columnsCount > i; i++ ) {
+		display_this_column_label(columns + i );
+	}
+	refresh();
+}
 void do_display(void) {
 	int i;
 	struct timeval time;
@@ -935,6 +959,7 @@ static int startup_mosquitto(void) {
 			initscr();
 			curs_set(0);	/* make cursor invisible */
 			// curs_set(1);	/* make cursor visible  for debugging */
+			do_display_labels();
 		}
 
 		if (  0 < displayHertz) {
@@ -1116,6 +1141,7 @@ int load_column( json_object *jobj, int i ) {
         }
 	this_column.periodic.maximum = this_column.continuous.maximum = 0.0 - INFINITY;
 	this_column.periodic.minimum = this_column.continuous.minimum = INFINITY;
+	this_column.uLastUpdate = microtime();
 
 	columns[i] = this_column;
 	columnsCount++;
