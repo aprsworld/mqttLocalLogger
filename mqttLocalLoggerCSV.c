@@ -34,6 +34,7 @@
 
 
 #define ALARM_SECONDS 600
+static int _columnDebugCount;
 static int run = 1;
 static int mqtt_port=1883;
 static char mqtt_host[256];
@@ -253,6 +254,7 @@ typedef struct {
 	int csvOutputY,csvOutputX;	/* y,x coordinates of the data if being displayed */
 	int csvTitleY,csvTitleX;	/* y,x coordinates of the title if being displayed */
 	int csvAgerY,csvAgerX;		/* y,x coordinates of the age-of-data if being displayed */
+	int debug;
 	/* internal elements */
 	STATISTICS periodic, continuous;
 	int integerColumn;
@@ -260,7 +262,8 @@ typedef struct {
 	enum Outputs csvOutputType;
 	uint64_t	uLastUpdate;	/* the microtime of the last packet */
 	void *packet;
-	int alreadyDisplayed;
+	int packet_count;
+	int display_count;
 } COLUMN;
 
 COLUMN columns[256];
@@ -295,7 +298,6 @@ json_object *parse_a_string(char *string ) {
 }
 void updateColumnStats( COLUMN *this_column,  TOPICS *this_topic ) {
 	this_column->uLastUpdate = microtime();
-	this_column->alreadyDisplayed = 0;
 	if ( count > this_column->csvOutputType ) {
 		return;	/* no stats for this column */
 	}
@@ -365,6 +367,15 @@ int findTopicColumns(char *s, char *packet, int packetlen ) {
 	}
 	for ( i = 0; columnsCount > i; i++ ) {
 		if ( 0 == strcmp(columns[i].mqttTopic,s) ) {
+			if ( 0 != columns[i].debug ) {
+				_columnDebugCount++;
+			}
+			columns[i].packet_count++;
+			if ( outputDebug && columns[i].debug ) {
+				fprintf(stderr,"# %d packet_count %d display_count\n",
+					columns[i].packet_count,
+					columns[i].display_count);
+			}
 			TOPICS *this_topic = columns[i].this_topic;
 
 			if ( 0 == this_topic ) {
@@ -379,19 +390,19 @@ int findTopicColumns(char *s, char *packet, int packetlen ) {
 			if ( 0 != tmp ) {
 				memcpy(tmp,packet,packetlen);
 			}
-			
-			this_topic->packet = tmp;
-			this_topic->packetCount++;;
-
 			if (  columns[i].packet ) {
 				free( columns[i].packet);
 			}
-
 			char *tmp2 = calloc(1,packetlen + 1);
 			if ( 0 != tmp2 ) {
 				memcpy(tmp2,packet,packetlen);
 			}
 			columns[i].packet = tmp2;	/* this is persistent so we can display it */
+			
+			this_topic->packet = tmp;
+			this_topic->packetCount++;;
+
+
 
 			updateColumnStats( columns + i,this_topic);
 			rc = false;
@@ -530,6 +541,10 @@ void outputThisJson( json_object *jobj, COLUMN thisColumn, FILE *out, int displa
 	char *fmt = (char *)thisColumn.csvOutputFormat;
 	STATISTICS t = (0 == displayFlag) ? thisColumn.periodic : thisColumn.continuous;
 
+	if ( 0 != thisColumn.debug ) {
+		_columnDebugCount++;
+	}
+
 	set_sigsegv(thisColumn);
 	const char *tmp = json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY);
 	int nullFlag = ( 0 == strcmp(tmp,"null"));
@@ -598,12 +613,16 @@ void outputThisJson( json_object *jobj, COLUMN thisColumn, FILE *out, int displa
 	}
 	if ( 0 != displayFlag ) {
 		mvaddstr(thisColumn.csvOutputY,thisColumn.csvOutputX,buffer);
+		refresh();
 	}
 	
 }
 int outputThisColumn( int idx, FILE *out ) {
 	COLUMN thisColumn = columns[idx];
 
+	if ( 0 != thisColumn.debug ) {
+		_columnDebugCount++;
+	}
 	if ( 0 == thisColumn.csvColumn[0] ) {
 		return	0;
 	}
@@ -794,23 +813,28 @@ static int _outputHeaders(void) {
 return	false;
 }
 static void display_this_column( COLUMN *this_column ) {
+	if ( 0 != this_column->debug ) {
+		_columnDebugCount++;
+	}
+	int flag = this_column->packet_count -  this_column->display_count;
 
-	if ( 0 <= this_column->csvTitleY && 0 <= this_column->csvTitleX  && 0 == this_column->alreadyDisplayed ) {
+	if ( 0 <= this_column->csvTitleY && 0 <= this_column->csvTitleX  && 0 != flag ) {
 		mvaddstr(this_column->csvTitleY,this_column->csvTitleX,this_column->csvTitle);
 	}
 
-	if ( 0 <= this_column->csvOutputY && 0 <= this_column->csvOutputX  && 0 == this_column->alreadyDisplayed ) {
-		if ( 0 == this_column->this_topic->jobj && 0 != this_column->packet ) {
-			this_column->this_topic->jobj = parse_a_string(this_column->packet);
-		}
+	if ( 0 <= this_column->csvOutputY && 0 <= this_column->csvOutputX  && 0 != flag ) {
+		this_column->this_topic->jobj = parse_a_string(this_column->packet);
 		json_object *tmp = NULL;
 		int rc = -1;
 		if ( 0 != this_column->this_topic->jobj ) {
 			rc = json_pointer_get(this_column->this_topic->jobj,this_column->jsonPath,&tmp);
 		}
 		if ( 0 == rc ) {
+			if ( 0 != this_column->debug ) {
+				_columnDebugCount++;
+			}
 			outputThisJson(tmp,*this_column,0,1);
-			this_column->alreadyDisplayed++;
+			this_column->display_count = this_column->packet_count;
 		}
 	}
 
@@ -958,7 +982,7 @@ static int startup_mosquitto(void) {
 		if ( displayHertz ) {
 			initscr();
 			curs_set(0);	/* make cursor invisible */
-			// curs_set(1);	/* make cursor visible  for debugging */
+			 //curs_set(1);	/* make cursor visible  for debugging */
 			do_display_labels();
 		}
 
@@ -1138,6 +1162,9 @@ int load_column( json_object *jobj, int i ) {
         }
 	if ( 0 != json_object_object_get_ex(jobj,"csvOutputFormat",&tmp)) {
                 this_column.csvOutputFormat = strsave((char *) json_object_get_string(tmp));
+        }
+	if ( 0 != json_object_object_get_ex(jobj,"debug",&tmp)) {
+                this_column.debug = json_object_get_int(tmp);
         }
 	this_column.periodic.maximum = this_column.continuous.maximum = 0.0 - INFINITY;
 	this_column.periodic.minimum = this_column.continuous.minimum = INFINITY;
