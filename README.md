@@ -1,5 +1,19 @@
 # mqttLocalLogger
 
+## mqttLocalLoggerCSV
+
+Logs CSV to the logfile from the incoming json.
+See [mqttLocalLoggerCSV.README.md](mqttLocalLoggerCSV.README.md) for details.
+
+## test_jsonPath
+
+Returns the json pointed to by jsonPath from the original json object.
+See [test_jsonPath.README.md](test_jsonPath.README.md) for details.
+
+## feedValuesToMQTT
+
+Takes a column of raw data and turns them into json mqtt packets.
+See [feedValuesToMQTT.README.md](feedValuesToMQTT.README.md) for details.
 ## Purpose
 
 mqttLocalLogger subscribes to one or more mqtt topics and logs to one or multiple log files.
@@ -15,6 +29,19 @@ mqttLocalLogger subscribes to one or more mqtt topics and logs to one or multipl
 `sudo apt-get install libmosquittopp-dev`
 
 `sudo apt-get install libssl1.0-dev`
+
+`sudo apt-get install libncurses-dev`
+
+If the current linux version does not include json-c-0.14 or above then:
+
+`git clone https://github.com/aprsworld/mqttLocalLogger.git`
+`mkdir json-c-build`
+`cd json-c-build`
+`cmake ../json-c`
+`make`
+`cd ..`
+`mv json-c json-c-0.14`
+
 
 ## Build
 
@@ -84,18 +111,3 @@ mqttLocalLogger will attempt to connect to the mqtt localhost server on port 202
 not will attempt to fix it.  It will verify that `./up/down/topic/left/right` and `./up/down/topic/right/left` are usable and
 attempt to fix any problems.  When data comes in depending on which topic the data will be written to the files 
 `./up/down/topic/left/right/BalloonData.json` or `./up/down/topic/right/left/BalloonData.json`.
-
-## mqttLocalLoggerCSV
-
-Logs CSV to the logfile from the incoming json.
-See [mqttLocalLoggerCSV.README.md](mqttLocalLoggerCSV.README.md) for details.
-
-## test_jsonPath
-
-Returns the json pointed to by jsonPath from the original json object.
-See [test_jsonPath.README.md](test_jsonPath.README.md) for details.
-
-## feedValuesToMQTT
-
-Takes a column of raw data and turns them into json mqtt packets.
-See [feedValuesToMQTT.README.md](feedValuesToMQTT.README.md) for details.
