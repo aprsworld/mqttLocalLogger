@@ -35,11 +35,17 @@ mqttLocalLogger subscribes to one or more mqtt topics and logs to one or multipl
 If the current linux version does not include json-c-0.14 or above then:
 
 `git clone https://github.com/aprsworld/mqttLocalLogger.git`
+
 `mkdir json-c-build`
+
 `cd json-c-build`
+
 `cmake ../json-c`
+
 `make`
+
 `cd ..`
+
 `mv json-c json-c-0.14`
 
 
