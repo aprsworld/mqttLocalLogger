@@ -828,14 +828,17 @@ static void display_this_column( COLUMN *this_column ) {
 		int rc = -1;
 		if ( 0 != this_column->this_topic->jobj ) {
 			rc = json_pointer_get(this_column->this_topic->jobj,this_column->jsonPath,&tmp);
-		}
-		if ( 0 == rc ) {
-			if ( 0 != this_column->debug ) {
-				_columnDebugCount++;
+			if ( 0 == rc ) {
+				if ( 0 != this_column->debug ) {
+					_columnDebugCount++;
+				}
+				outputThisJson(tmp,*this_column,0,1);
+				this_column->display_count = this_column->packet_count;
 			}
-			outputThisJson(tmp,*this_column,0,1);
-			this_column->display_count = this_column->packet_count;
+			json_object_put(this_column->this_topic->jobj);
+			this_column->this_topic->jobj = NULL;
 		}
+		
 	}
 
 	if ( 0 <= this_column->csvAgerY && 0 <= this_column->csvAgerX ) {
