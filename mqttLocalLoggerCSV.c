@@ -657,6 +657,10 @@ int outputThisColumn( int idx, FILE *out ) {
 
 	outputThisJson(tmp,thisColumn,out,0);
 	outputSeparatorCount = thisColumn.integerColumn;
+	/* tmp does not have to be released because it points into thisColumn.this_topic->jobj */
+	if ( 0 != thisColumn.this_topic->jobj ) {
+		json_object_put(thisColumn.this_topic->jobj );
+	}
 	
 return	0;
 }
