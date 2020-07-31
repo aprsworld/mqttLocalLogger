@@ -302,6 +302,9 @@ void updateColumnStats( COLUMN *this_column,  TOPICS *this_topic ) {
 		return;	/* no stats for this column */
 	}
 	/* we now must build a json_object */
+	if ( 0 != this_column->this_topic->jobj ) {
+		json_object_put(this_column->this_topic->jobj);
+	}
 	this_column->this_topic->jobj = parse_a_string(this_column->this_topic->packet);
 	int rc = -1;
 	json_object *tmp = NULL;
@@ -628,6 +631,9 @@ int outputThisColumn( int idx, FILE *out ) {
 	}
 
 	if ( 0 == thisColumn.this_topic->jobj && 0 != thisColumn.this_topic->packet ) {
+		if ( 0 != thisColumn.this_topic->jobj ) {
+			json_object_put(thisColumn.this_topic->jobj );
+		}
 		thisColumn.this_topic->jobj = parse_a_string(thisColumn.this_topic->packet);
 	}
 	/* now grab the data for this column */
