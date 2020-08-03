@@ -14,11 +14,11 @@ mqttLocalLogger.o: mqttLocalLogger.c
 
 
 mqttLocalLoggerCSV: mqttLocalLoggerCSV.o 
-	$(CC) mqttLocalLoggerCSV.o  -o mqttLocalLoggerCSV $(CFLAGS) $(LDFLAGS) -lm -ljson-c -lmosquitto -lncurses
+	$(CC) mqttLocalLoggerCSV.o  -o mqttLocalLoggerCSV -Wall $(CFLAGS) $(LDFLAGS) -lm -ljson-c -lmosquitto -lncurses
 
 
 mqttLocalLoggerCSV.o: mqttLocalLoggerCSV.c
-	$(CC)  -c mqttLocalLoggerCSV.c  $(CFLAGS) -I/usr/include/json-c/
+	$(CC)  -c mqttLocalLoggerCSV.c  -Wall $(CFLAGS) -I/usr/include/json-c/
 
 test_jsonPath:	test_jsonPath.o
 	$(CC) test_jsonPath.o  -o test_jsonPath $(CFLAGS) $(LDFLAGS) -lm -ljson-c -lmosquitto 

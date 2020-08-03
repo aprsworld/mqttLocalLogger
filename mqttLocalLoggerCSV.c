@@ -68,9 +68,9 @@ char	*strsave(char *s ) {
 typedef struct topics {
 	struct topics *left,*right;
 	char	*topic;
-	char *packet;
+	char *t_packet;
 	int packetCount;
-	json_object *jobj;
+	json_object *t_jobj;
 	}	TOPICS;
 
 TOPICS *topic_root = 0;
@@ -126,7 +126,7 @@ if ( '/' != buffer[len -1] )	buffer[len] = '/';
 
 
 
-while ( p = strsep(&q,"/")) {	// assumes / is the FS separator 
+while ( 0 != (p = strsep(&q,"/"))) {	// assumes / is the FS separator 
 	strcat(path,p);	strcat(path,"/");
 	if ( 0 != stat(path,&buf)) {
 		/* assume that it does not exist */
@@ -258,10 +258,10 @@ typedef struct {
 	/* internal elements */
 	STATISTICS periodic, continuous;
 	int integerColumn;
-	TOPICS *this_topic;
+	TOPICS *c_this_topic;
 	enum Outputs csvOutputType;
 	uint64_t	uLastUpdate;	/* the microtime of the last packet */
-	void *packet;
+	void *c_packet;
 	int packet_count;
 	int display_count;
 } COLUMN;
@@ -277,13 +277,14 @@ json_object *parse_a_string(char *string ) {
 	const char *mystring = string;
 	int stringlen = 0;
 	enum json_tokener_error jerr;
-	do {
-		stringlen = strlen(mystring);
-		jobj = json_tokener_parse_ex(tok, mystring, stringlen);
-	} while ((jerr = json_tokener_get_error(tok)) == json_tokener_continue);
+
+	stringlen = strlen(mystring);
+	jobj = json_tokener_parse_ex(tok, mystring, stringlen);
+	jerr = json_tokener_get_error(tok);
+
 	if (jerr != json_tokener_success) {
 		fprintf(stderr, "Error: %s\n", json_tokener_error_desc(jerr));
-		// Handle errors, as appropriate for your application.
+		exit(1);
 	}
 	if (tok->char_offset < stringlen) {
 		// Handle extra characters after parsed object as desired.
@@ -294,6 +295,8 @@ json_object *parse_a_string(char *string ) {
 		latency += microtime();
 		fprintf(stderr,"# parse_a_string() latency %ld\n",latency);
 	}
+	json_tokener_free(tok);
+
 	return	jobj;
 }
 void updateColumnStats( COLUMN *this_column,  TOPICS *this_topic ) {
@@ -302,14 +305,11 @@ void updateColumnStats( COLUMN *this_column,  TOPICS *this_topic ) {
 		return;	/* no stats for this column */
 	}
 	/* we now must build a json_object */
-	if ( 0 != this_column->this_topic->jobj ) {
-		json_object_put(this_column->this_topic->jobj);
-	}
-	this_column->this_topic->jobj = parse_a_string(this_column->this_topic->packet);
+	this_column->c_this_topic->t_jobj = parse_a_string(this_column->c_this_topic->t_packet);
 	int rc = -1;
 	json_object *tmp = NULL;
-	if ( 0 !=  this_column->this_topic->jobj) {
-		rc = json_pointer_get(this_column->this_topic->jobj,this_column->jsonPath,&tmp);
+	if ( 0 !=  this_column->c_this_topic->t_jobj) {
+		rc = json_pointer_get(this_column->c_this_topic->t_jobj,this_column->jsonPath,&tmp);
 	}
 	if ( 0 == rc ) { /* this element exist  so we can stat this element */
 		double x,previous_mean;
@@ -357,10 +357,35 @@ void updateColumnStats( COLUMN *this_column,  TOPICS *this_topic ) {
 				this_column->continuous.minimum = 
 					( x < this_column->continuous.minimum) ? x : this_column->continuous.minimum;
 				break;
+			default:
+				break;
 				
+		}
+		if ( 0 != this_column->c_this_topic->t_jobj ) {
+			json_object_put(this_column->c_this_topic->t_jobj);
 		}
 	}
 
+}
+void update_this_Topic( int i, char * packet, int packetlen ) {
+
+	TOPICS *this_topic = columns[i].c_this_topic;
+
+	if ( 0 == this_topic ) {
+		fprintf(stderr,"# internal error findTopicColumns\n");
+		exit(1);
+	}
+	if ( 0 != this_topic->t_packet ) {
+		free(this_topic->t_packet);
+		this_topic->t_packet = 0;
+	}
+	char *tmp = calloc(1,packetlen + 1);
+	if ( 0 != tmp ) {
+		memcpy(tmp,packet,packetlen);
+	}
+	
+	this_topic->t_packet = tmp;
+	this_topic->packetCount++;;
 }
 int findTopicColumns(char *s, char *packet, int packetlen ) {
 	int i = 0;
@@ -370,43 +395,25 @@ int findTopicColumns(char *s, char *packet, int packetlen ) {
 	}
 	for ( i = 0; columnsCount > i; i++ ) {
 		if ( 0 == strcmp(columns[i].mqttTopic,s) ) {
+			update_this_Topic( i , packet , packetlen );
 			if ( 0 != columns[i].debug ) {
 				_columnDebugCount++;
 			}
-			columns[i].packet_count++;
 			if ( outputDebug && columns[i].debug ) {
 				fprintf(stderr,"# %d packet_count %d display_count\n",
 					columns[i].packet_count,
 					columns[i].display_count);
 			}
-			TOPICS *this_topic = columns[i].this_topic;
-
-			if ( 0 == this_topic ) {
-				fprintf(stderr,"# internal error findTopicColumns\n");
-				exit(1);
-			}
-			if ( 0 != this_topic->packet ) {
-				free(this_topic->packet);
-				this_topic->packet = 0;
-			}
-			char *tmp = calloc(1,packetlen + 1);
-			if ( 0 != tmp ) {
-				memcpy(tmp,packet,packetlen);
-			}
-			if (  columns[i].packet ) {
-				free( columns[i].packet);
+			if ( 0 != columns[i].c_packet ) {
+				free ( columns[i].c_packet );
 			}
 			char *tmp2 = calloc(1,packetlen + 1);
 			if ( 0 != tmp2 ) {
 				memcpy(tmp2,packet,packetlen);
 			}
-			columns[i].packet = tmp2;	/* this is persistent so we can display it */
-			
-			this_topic->packet = tmp;
-			this_topic->packetCount++;;
-
-
-
+			columns[i].c_packet = tmp2;	/* this is persistent so we can display it */
+			columns[i].packet_count++;
+			TOPICS *this_topic = columns[i].c_this_topic;
 			updateColumnStats( columns + i,this_topic);
 			rc = false;
 		}
@@ -487,13 +494,13 @@ void output_clear(TOPICS *p) {
 		return;
 	}
 	output_clear(p->left);
-	if ( 0 != p->packet ) {
-		free(p->packet);
-		p->packet = 0;
+	if ( 0 != p->t_packet ) {
+		free(p->t_packet);
+		p->t_packet = 0;
 	}
-	if ( 0 != p->jobj ) {
-		json_object_put(p->jobj);
-		p->jobj = NULL;
+	if ( 0 != p->t_jobj ) {
+		json_object_put(p->t_jobj);
+		p->t_jobj = NULL;
 	}
 	output_clear(p->right);
 }
@@ -593,7 +600,7 @@ void outputThisJson( json_object *jobj, COLUMN thisColumn, FILE *out, int displa
 			if ( ( 0.0 - INFINITY) != t.maximum ) {
 				snprintf(buffer,sizeof(buffer),fmt,t.maximum);
 			} else {
-				strncmp(buffer,"NULL",sizeof(buffer));
+				strncpy(buffer,"NULL",sizeof(buffer));
 			}
 			break;
 		case minimum:
@@ -601,7 +608,7 @@ void outputThisJson( json_object *jobj, COLUMN thisColumn, FILE *out, int displa
 			if ( INFINITY != t.minimum ) {
 				snprintf(buffer,sizeof(buffer),fmt,t.minimum);
 			} else {
-				strncmp(buffer,"NULL",sizeof(buffer));
+				strncpy(buffer,"NULL",sizeof(buffer));
 			}
 			break;
 			
@@ -630,17 +637,19 @@ int outputThisColumn( int idx, FILE *out ) {
 		return	0;
 	}
 
-	if ( 0 == thisColumn.this_topic->jobj && 0 != thisColumn.this_topic->packet ) {
-		if ( 0 != thisColumn.this_topic->jobj ) {
-			json_object_put(thisColumn.this_topic->jobj );
-		}
-		thisColumn.this_topic->jobj = parse_a_string(thisColumn.this_topic->packet);
+	if ( 0 != thisColumn.c_this_topic->t_jobj ) {
+		json_object_put(thisColumn.c_this_topic->t_jobj );
 	}
+	thisColumn.c_this_topic->t_jobj = parse_a_string(thisColumn.c_this_topic->t_packet);
+
 	/* now grab the data for this column */
 	json_object *tmp = NULL;
 	int rc = -1;
-	if ( 0 != thisColumn.this_topic->jobj ) {
-		rc = json_pointer_get(thisColumn.this_topic->jobj,thisColumn.jsonPath,&tmp);
+	if ( 0 != thisColumn.c_this_topic->t_jobj ) {
+		rc = json_pointer_get(thisColumn.c_this_topic->t_jobj,thisColumn.jsonPath,&tmp);
+		if ( 0 != rc ) {
+			fprintf(stderr,"# rc = %d\n",rc);
+		}
 	}
 
 	int i = outputSeparatorCount + 1;
@@ -658,8 +667,9 @@ int outputThisColumn( int idx, FILE *out ) {
 	outputThisJson(tmp,thisColumn,out,0);
 	outputSeparatorCount = thisColumn.integerColumn;
 	/* tmp does not have to be released because it points into thisColumn.this_topic->jobj */
-	if ( 0 != thisColumn.this_topic->jobj ) {
-		json_object_put(thisColumn.this_topic->jobj );
+	if ( 0 != thisColumn.c_this_topic->t_jobj ) {
+		json_object_put(thisColumn.c_this_topic->t_jobj );
+		thisColumn.c_this_topic->t_jobj = 0;
 	}
 	
 return	0;
@@ -822,6 +832,7 @@ static int _outputHeaders(void) {
 
 return	false;
 }
+
 static void display_this_column( COLUMN *this_column ) {
 	if ( 0 != this_column->debug ) {
 		_columnDebugCount++;
@@ -833,23 +844,25 @@ static void display_this_column( COLUMN *this_column ) {
 	}
 
 	if ( 0 <= this_column->csvOutputY && 0 <= this_column->csvOutputX  && 0 != flag ) {
-		this_column->this_topic->jobj = parse_a_string(this_column->packet);
+		(this_column->c_this_topic)->t_jobj = parse_a_string(this_column->c_packet);
 		json_object *tmp = NULL;
 		int rc = -1;
-		if ( 0 != this_column->this_topic->jobj ) {
-			rc = json_pointer_get(this_column->this_topic->jobj,this_column->jsonPath,&tmp);
+		if ( 0 != this_column->c_this_topic->t_jobj ) {
+			rc = json_pointer_get(this_column->c_this_topic->t_jobj,this_column->jsonPath,&tmp);
 			if ( 0 == rc ) {
 				if ( 0 != this_column->debug ) {
 					_columnDebugCount++;
 				}
 				outputThisJson(tmp,*this_column,0,1);
-				this_column->display_count = this_column->packet_count;
 			}
-			json_object_put(this_column->this_topic->jobj);
-			this_column->this_topic->jobj = NULL;
 		}
-		
+		this_column->display_count = this_column->packet_count;
+		if ( 0 != (this_column->c_this_topic)->t_jobj ) {
+			json_object_put((this_column->c_this_topic)->t_jobj);
+		}
+		this_column->c_this_topic->t_jobj = NULL;
 	}
+
 
 	if ( 0 <= this_column->csvAgerY && 0 <= this_column->csvAgerX ) {
 		char buffer[32];
@@ -982,7 +995,7 @@ static int startup_mosquitto(void) {
 	if (mosq) {
 		int loop_interval;
 
-		if ( 0 != mosq,mqtt_user_name && 0 != mqtt_passwd ) {
+		if ( 0 != mqtt_user_name && 0 != mqtt_passwd ) {
 			mosquitto_username_pw_set(mosq,mqtt_user_name,mqtt_passwd);
 		}
 		mosquitto_connect_callback_set(mosq, connect_callback);
@@ -995,7 +1008,7 @@ static int startup_mosquitto(void) {
 		if ( displayHertz ) {
 			initscr();
 			curs_set(0);	/* make cursor invisible */
-			 //curs_set(1);	/* make cursor visible  for debugging */
+			// curs_set(1);	/* make cursor visible  for debugging */
 			do_display_labels();
 		}
 
@@ -1141,7 +1154,7 @@ int load_column( json_object *jobj, int i ) {
 		fprintf(stderr,"# integerColumn=%d\n",this_column.integerColumn);
 	}
 
-	this_column.this_topic = add_topic(	this_column.mqttTopic );
+	this_column.c_this_topic = add_topic(	this_column.mqttTopic );
 
 	this_column.csvOutputType = get_csvOutputType(this_column.csvOutput);
 	if ( 0 == this_column.csvOutputType ) {
@@ -1149,7 +1162,7 @@ int load_column( json_object *jobj, int i ) {
 	}
 	
 	if ( 0 != outputDebug ) {
-		fprintf(stderr,"# this_topic->topic=%s\n",this_column.this_topic->topic);
+		fprintf(stderr,"# this_topic->topic=%s\n",this_column.c_this_topic->topic);
 	}
 	/* now process the optional display configuration */
 	this_column.csvTitleY = this_column.csvTitleX = this_column.csvOutputY = this_column.csvOutputX = 
