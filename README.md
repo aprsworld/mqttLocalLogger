@@ -59,6 +59,7 @@ If the current linux version does not include json-c-0.14 or above then:
 switch|Required/Optional|argument|description
 ---|---|---|---
 --mqtt-topic|REQUIRED|topic|mqtt topic
+--mqtt-status-topic|OPTIOBAL|topic|mqtt topic for logging the status of the logger
 --log-file-suffix|OPTIONAL|text|end each log filename with suffix ie. ".json"   default="" 
 --mqtt-port|OPTIONAL|number|default is 1883
 --log-dir|OPTIONAL|path|logging derectory, default="logLocal"
