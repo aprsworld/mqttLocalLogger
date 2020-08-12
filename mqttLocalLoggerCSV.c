@@ -145,10 +145,10 @@ return	rc;
 
 static FILE * _openLogfile(void) {
 	FILE	*out;
-	char	fname[256];
+	char	fname[256+256+256+4];
 	char	prefix[256] = {};
 	char	suffix[256] = {};
-	char	path[256] = {};
+	char	path[256+256+256+4] = {};
 	struct tm *now;
 	struct timeval time;
         gettimeofday(&time, NULL);
@@ -293,7 +293,7 @@ json_object *parse_a_string(char *string ) {
 	if ( outputDebug ) {
 		fprintf(stderr,"# parse_a_string() output = %s\n",json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY));
 		latency += microtime();
-		fprintf(stderr,"# parse_a_string() latency %ld\n",latency);
+		fprintf(stderr,"# parse_a_string() latency %lld\n",latency);
 	}
 	json_tokener_free(tok);
 
@@ -770,7 +770,7 @@ int next_msec(struct timeval *real_time, struct timeval *trigger_time ) {
 
 	if ( outputDebug ) {
 		latency += microtime();
-		fprintf(stderr,"# next_msec latency %ld\n",latency);
+		fprintf(stderr,"# next_msec latency %lld\n",latency);
 	}
 			
 		
@@ -868,7 +868,7 @@ static void display_this_column( COLUMN *this_column ) {
 		char buffer[32];
 		uint64_t latency =  microtime() - this_column->uLastUpdate;
 		latency /= 1000;	/* convert to msec */
-		snprintf(buffer,sizeof(buffer),"%3ld.%03ld s",latency/1000, latency % 1000);
+		snprintf(buffer,sizeof(buffer),"%3lld.%03lld s",latency/1000, latency % 1000);
 		mvaddstr(this_column->csvAgerY,this_column->csvAgerX,buffer);
 	}
 
@@ -1027,7 +1027,7 @@ static int startup_mosquitto(void) {
 			rc = mosquitto_loop(mosq, loop_interval, 1);
 			if ( outputDebug ) {
 				latency += microtime();
-				fprintf(stderr,"# mosquitto_loop() latency %ld %d\n",latency,++whileCount);
+				fprintf(stderr,"# mosquitto_loop() latency %lld %d\n",latency,++whileCount);
 			}
 
 			if ( MOSQ_ERR_SUCCESS == rc ) {
@@ -1039,7 +1039,7 @@ static int startup_mosquitto(void) {
 				}
 				if ( outputDebug ) {
 					latency += microtime();
-					fprintf(stderr,"# do_csvOutput() latency %ld\n",latency);
+					fprintf(stderr,"# do_csvOutput() latency %lld\n",latency);
 				}
 			}
 

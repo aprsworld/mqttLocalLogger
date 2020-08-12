@@ -35,6 +35,8 @@ static char logFilePrefix[256];
 static char logFileSuffix[256];
 static int splitLogFilesByDay = 1;	
 static int flushAfterEachMessage = 1;
+char *mqtt_status_topic;
+char *program_name;
 
 int outputDebug=0;
 #if 0
@@ -254,10 +256,45 @@ void message_callback(struct mosquitto *mosq, void *obj, const struct mosquitto_
 }
 void topics_mosquitto_subscribe(TOPICS *p, struct mosquitto *mosq)
 {
-if ( 0 == p )	return;
-topics_mosquitto_subscribe(p->left,mosq);
-mosquitto_subscribe(mosq, NULL, p->topic, 0);
-topics_mosquitto_subscribe(p->right,mosq);
+	if ( 0 == p ){
+		return;
+	}
+	topics_mosquitto_subscribe(p->left,mosq);
+	mosquitto_subscribe(mosq, NULL, p->topic, 0);
+	topics_mosquitto_subscribe(p->right,mosq);
+}
+int status_topic_interval(struct timeval time ) {
+	static struct timeval last_time;
+	int ret_val = (time.tv_sec > last_time.tv_sec );
+	if ( 0 != ret_val ) {
+		last_time = time;
+	}
+	return ret_val;
+}
+void pub_status_topic( struct mosquitto *mosq ) {
+	struct timeval time;
+	gettimeofday(&time, NULL);
+	if ( 0 != mqtt_status_topic && status_topic_interval(time) ) {
+		static int messageID;
+		char	buffer[128] = {};
+		char timestamp[32];
+		struct tm *now;
+		now = localtime(&time.tv_sec);
+		if ( 0 == now ) {
+			fprintf(stderr,"# error calling localtime() %s",strerror(errno));
+			exit(1);
+		}
+
+		snprintf(timestamp,sizeof(timestamp),"%04d-%02d-%02d %02d:%02d:%02d.%03ld",
+			1900 + now->tm_year,1 + now->tm_mon, now->tm_mday,now->tm_hour,now->tm_min,
+			now->tm_sec,time.tv_usec/1000);
+		snprintf(buffer,sizeof(buffer),"%s online at %s\n",program_name,timestamp);
+
+		int rc = mosquitto_publish(mosq, &messageID, mqtt_status_topic, strlen(buffer), buffer, 2, 0 ); 
+		if ( 0 != rc ) {
+			fprintf(stderr,"# pub_status_topic error. '%s'\n",buffer);
+		}
+	}
 }
 static int startup_mosquitto(void) {
 	char clientid[24];
@@ -291,6 +328,7 @@ static int startup_mosquitto(void) {
 		topics_mosquitto_subscribe(topic_root,mosq);
 
 		while (run) {
+			pub_status_topic(mosq);
 			rc = mosquitto_loop(mosq, -1, 1);
 
 			if ( run && rc ) {
@@ -321,6 +359,7 @@ return	rc;
 enum arguments {
 	A_mqtt_host = 512,
 	A_mqtt_topic,
+	A_mqtt_status_topic,
 	A_mqtt_port,
 	A_mqtt_user_name,
 	A_mqtt_password,
@@ -339,6 +378,8 @@ int main(int argc, char **argv) {
 	char	cwd[256] = {};
 	(void) getcwd(cwd,sizeof(cwd));
 
+	program_name = strsave(argv[0]);
+
 	/* command line arguments */
 	while (1) {
 		// int this_option_optind = optind ? optind : 1;
@@ -351,6 +392,7 @@ int main(int argc, char **argv) {
 		        {"log-file-suffix",                  1,                 0, A_log_file_suffix },
 		        {"mqtt-host",                        1,                 0, A_mqtt_host },
 		        {"mqtt-topic",                       1,                 0, A_mqtt_topic },
+		        {"mqtt-status-topic",                1,                 0, A_mqtt_status_topic },
 		        {"mqtt-port",                        1,                 0, A_mqtt_port },
 		        {"mqtt-user-name",                   1,                 0, A_mqtt_user_name },
 		        {"mqtt-passwd",                      1,                 0, A_mqtt_password },
@@ -377,6 +419,9 @@ int main(int argc, char **argv) {
 				break;
 			case A_mqtt_topic:
 				add_topic(optarg);
+				break;
+			case A_mqtt_status_topic:
+				mqtt_status_topic = strsave(optarg);
 				break;
 			case A_mqtt_port:
 				mqtt_port = atoi(optarg);
@@ -421,6 +466,7 @@ int main(int argc, char **argv) {
 				fprintf(stdout,"# --mqtt-host\t\t\tmqtt-host is required\tREQUIRED\n");
 				fprintf(stdout,"# --log-file-suffix\t\tend each log filename with suffix\n");
 				fprintf(stdout,"# --mqtt-topic\t\t\tmqtt topic must be used at least once\n");
+				fprintf(stdout,"# --mqtt-status-topic\t\tuse 0-1 times.\n");
 				fprintf(stdout,"# --mqtt-port\t\t\tmqtt port\t\tOPTIONAL\n");
 				fprintf(stdout,"# --log-dir\t\t\tlogging directory, default=logLocal\n");
 				fprintf(stdout,"# --unitary-log-file\t\tunitaryLogFile\n");
