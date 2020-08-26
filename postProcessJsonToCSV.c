@@ -811,8 +811,12 @@ int main(int argc, char **argv) {
 				fprintf(stderr,"# progress indicator enabled\n");
 				break;
 			case A_help:
-				fprintf(stdout,"# --configuration\t\tjson columns\tREQUIRED\n");
-				fprintf(stdout,"# --log-dir\t\t\tlogging directory, default=logLocal\n");
+				fprintf(stdout,"# --configuration\t\tjson columns\t\t\tREQUIRED\n");
+				fprintf(stdout,"# --input-file-name\t\tbasename (NO PATH)\t\tREQUIRED\n");
+				fprintf(stdout,"# --output-file-name\t\tlogg-dir/name\t\t\tREQUIRED\n");
+				fprintf(stdout,"# --log-dir\t\t\tlogging directory, default=logLocal\tOPTIONAL\n");
+				fprintf(stdout,"# --verbose\t\t\tNO ARGS\t\t\t\tOPTIONAL\n");
+				fprintf(stdout,"# --progress-indicator\t\tNO AGRS\t\t\t\tOPTIONAL\n");
 				fprintf(stdout,"#\n");
 				fprintf(stdout,"# --help\t\t\tThis help message then exit\n");
 				fprintf(stdout,"#\n");
