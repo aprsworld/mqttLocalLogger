@@ -4,7 +4,7 @@
 
 postProcessJsonToCSV allows the build of a csv file from the same configuration as used by
 mqttLocalLoggerCSV.   It is freed from the constrains of operating in real time, so all of the
-records are process in correct order and not records are missed because the did not make the
+records are process in correct order and no records are missed because the did not make the
 real time cutoff.
 
 
@@ -33,7 +33,7 @@ switch|Required/Optional|argument|description
 ---|---|---|---
 --configuration|REQUIRED|text|Contains json array of columns defining i/o
 --input-file-name|REQUIRED|basename|ie 20200813.gz
---output-file-name|REQUIRED|relative to log-dir or absolute
+--output-file-name|REQUIRED|filename|relative to log-dir or absolute
 --log-dir|OPTIONAL|path|logging derectory, default="logLocal"
 --verbose|OPTIONAL|(none)|Turn on verbose (debuging).
 --progress-indicator|OPTIONAL|(none)|reports every 1000 records
@@ -61,7 +61,7 @@ also you a name with an abosulte path.
 
 ## --log-dir
 
-Logs CSV to the logfile from in --log-dir
+Logs CSV to the logfile in --log-dir
 See [README.md](README.md) for details.
 
 ## --verbose
@@ -70,7 +70,7 @@ Adds runtime na debugging info to stderr.
 
 ## --progress-indicator
 
-Add a report every 1,000 input records and reports the count and the timestamp being processed.
+Add a report every 1,000 input records and reports the count and the timestamp being processed to stderr.
 
 ## example
 
