@@ -2,7 +2,7 @@ CC=gcc
 CFLAGS=-Ijson-c-0.14 -I. -Wunused-function  -Wunused-variable -g
 LDFLAGS=-Ljson-c-build
 
-SYS: mqttLocalLogger mqttLocalLoggerCSV test_jsonPath feedValuesToMQTT postProcessJsonToCSV 
+SYS: mqttLocalLogger mqttLocalLoggerCSV test_jsonPath feedValuesToMQTT postProcessJsonToCSV ProcessJsonToCSV 
 	touch SYS
 
 mqttLocalLogger: mqttLocalLogger.o 
@@ -40,6 +40,15 @@ MqttJsonTransformer.o: MqttJsonTransformer.c
 
 postProcessJsonToCSV: postProcessJsonToCSV.c
 	$(CC)  -g postProcessJsonToCSV.c -o postProcessJsonToCSV $(CFLAGS) $(LDFLAGS)  -I/usr/include/json-c/ -ljson-c
+
+ProcessJsonToCSV: ProcessJsonToCSV.o queue.o
+	$(CC) ProcessJsonToCSV.o  queue.o -o ProcessJsonToCSV -Wall $(CFLAGS) $(LDFLAGS) -lm -ljson-c -lmosquitto -lncurses
+
+ProcessJsonToCSV.o: ProcessJsonToCSV.c
+	$(CC)  -c ProcessJsonToCSV.c  -Wall $(CFLAGS) -I/usr/include/json-c/
+
+queue.o: queue.c
+	$(CC)  -c queue.c  -Wall $(CFLAGS) 
 
 clean:
 	rm -f *.o
