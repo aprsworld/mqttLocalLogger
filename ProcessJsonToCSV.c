@@ -699,40 +699,6 @@ void outputThisJson( json_object *jobj, COLUMN thisColumn, FILE *out, int displa
 	}
 	
 }
-#if 0
-int outputThisColumn( int idx, FILE *out ) {
-	COLUMN thisColumn = columns[idx];
-
-	if ( 0 == thisColumn.csvColumn[0] ) {
-		return	0;
-	}
-
-	/* now grab the data for this column */
-	json_object *tmp = NULL;
-	int rc = -1;
-	if ( 0 != thisColumn.c_this_topic->t_jobj ) {
-		rc = json_pointer_get(thisColumn.c_this_topic->t_jobj,thisColumn.jsonPath,&tmp);
-		if ( 0 != rc ) {
-			fprintf(stderr,"# rc = %d\n",rc);
-		}
-	}
-
-	int i = outputSeparatorCount + 1;
-	for ( ; thisColumn.integerColumn > i; i++ ) {
-		if ( 0 != out ) {
-			fprintf(out,",");
-		}
-	}
-		
-	
-
-	outputThisJson(tmp,thisColumn,out,0);
-	outputSeparatorCount = thisColumn.integerColumn;
-	
-	return	0;
-}
-#endif
-#if 1
 int outputThisColumn( int idx, FILE *out ) {
 	COLUMN thisColumn = columns[idx];
 
@@ -743,12 +709,6 @@ int outputThisColumn( int idx, FILE *out ) {
 		return	0;
 	}
 
-#if 0
-	if ( 0 != thisColumn.c_this_topic->t_jobj ) {
-		json_object_put(thisColumn.c_this_topic->t_jobj );
-	}
-	thisColumn.c_this_topic->t_jobj = parse_a_string(thisColumn.c_this_topic->t_packet);
-#endif
 
 	/* now grab the data for this column */
 	json_object *tmp = NULL;
@@ -774,83 +734,8 @@ int outputThisColumn( int idx, FILE *out ) {
 
 	outputThisJson(tmp,thisColumn,out,0);
 	outputSeparatorCount = thisColumn.integerColumn;
-#if 0
-	/* tmp does not have to be released because it points into thisColumn.this_topic->jobj */
-	if ( 0 != thisColumn.c_this_topic->t_jobj ) {
-		json_object_put(thisColumn.c_this_topic->t_jobj );
-		thisColumn.c_this_topic->t_jobj = 0;
-	}
-#endif
 	
 return	0;
-}
-#endif
-int next_hertz(struct timeval *real_time, struct timeval *trigger_time ) {
-	static uint64_t hertz_interval ;
-
-	if ( 0 == hertz_interval ) {
-		hertz_interval =  ((uint64_t)1000000/hertz);
-	}
-
-
-	if ( 0  == trigger_time->tv_sec ) {
-		trigger_time->tv_sec = real_time->tv_sec +1;	/* start at the next second */
-		trigger_time->tv_usec = 0;
-		return true;
-	}
-	
-	uint64_t t1,t2;
-	t1 = ((uint64_t)real_time->tv_sec * 1000000) + real_time->tv_usec;
-	t2 = ((uint64_t)trigger_time->tv_sec * 1000000) + trigger_time->tv_usec;
-	if ( t1 < t2 ) {
-		return	true;
-	}
-	/*   we are triggered */
-	if ( 1 == hertz ) {
-		while ( t1 > t2 ) {
-			trigger_time->tv_sec++;
-			t2 = ((uint64_t)trigger_time->tv_sec * 1000000) + trigger_time->tv_usec;
-		}
-	}
-	else {
-		t2 += hertz_interval;
-		trigger_time->tv_sec = t2 / 1000000;
-		trigger_time->tv_usec = t2 % 1000000;
-	}
-		
-	return	false;	/* we have been triggered. */	
-
-}
-int next_msec(struct timeval *real_time, struct timeval *trigger_time ) {
-
-	uint64_t latency = (uint64_t) 0 - microtime();
-
-	if ( 0  == trigger_time->tv_sec ) {
-		trigger_time->tv_sec = real_time->tv_sec +1;	/* start at the next second */
-		trigger_time->tv_usec = 0;
-		return true;
-	}
-	
-	uint64_t t1,t2;
-	t1 = ((uint64_t)real_time->tv_sec * 1000000) + real_time->tv_usec;
-	t2 = ((uint64_t)trigger_time->tv_sec * 1000000) + trigger_time->tv_usec;
-	if ( t1 < t2 ) {
-		return	true;
-	}
-	/*   we are triggered */
-	t2 += milliseconds * 1000;
-	trigger_time->tv_sec = t2 / 1000000;
-	trigger_time->tv_usec = t2 % 1000000;
-
-
-	if ( outputDebug ) {
-		latency += microtime();
-		fprintf(stderr,"# next_msec latency %lld\n",(long long int)latency);
-	}
-			
-		
-	return	false;	/* we have been triggered. */	
-
 }
 int outputThisColumnHeader( int idx, FILE *out ) {
 	COLUMN thisColumn = columns[idx];
@@ -1177,7 +1062,6 @@ static int startup_mosquitto(void) {
 	mosq = mosquitto_new(clientid, true, 0);
 
 	if (mosq) {
-		int loop_interval;
 
 		if ( 0 != mqtt_user_name && 0 != mqtt_passwd ) {
 			mosquitto_username_pw_set(mosq,mqtt_user_name,mqtt_passwd);
@@ -1190,12 +1074,8 @@ static int startup_mosquitto(void) {
 
 		topics_mosquitto_subscribe(topic_root,mosq);
 
-		if ( 0 < hertz ) {
-			loop_interval = (1000/hertz) >> 1;
-		} else {
-			loop_interval = 500;
-		}
 
+		int loop_interval = 500;
 
 
 		while (run) {
@@ -1443,7 +1323,6 @@ enum arguments {
 	A_mqtt_user_name,
 	A_mqtt_password,
 	A_configuration,
-	A_hertz,
 	A_millisecond_interval,
 	A_log_dir,
 	A_unitary_log_file,
@@ -1476,7 +1355,6 @@ int main(int argc, char **argv) {
 		        {"mqtt-user-name",                   1,                 0, A_mqtt_user_name },
 		        {"mqtt-passwd",                      1,                 0, A_mqtt_password },
 		        {"configuration",                    1,                 0, A_configuration },
-		        {"hertz",                            1,                 0, A_hertz },
 		        {"millisecond-interval",             1,                 0, A_millisecond_interval },
 			{"quiet",                            no_argument,       0, A_quiet, },
 			{"verbose",                          no_argument,       0, A_verbose, },
@@ -1508,14 +1386,6 @@ int main(int argc, char **argv) {
 				unitaryLogFile=1;
 				fprintf(stderr,"# unitaryLogFile\tlogging to one directory\n");
 				break;
-			case A_millisecond_interval:	
-				milliseconds = atoi(optarg);
-				fprintf(stderr,"# %d millisecond-interval\n",milliseconds);
-				break;
-			case A_hertz:	
-				hertz = atoi(optarg);
-				fprintf(stderr,"# %d hertz\n",hertz);
-				break;
 			case A_configuration:	
 				strncpy(configuration,optarg,sizeof(configuration));
 				break;
@@ -1545,12 +1415,15 @@ int main(int argc, char **argv) {
 			case A_help:
 				fprintf(stdout,"# --configuration\t\tjson columns\tREQUIRED\n");
 				fprintf(stdout,"# --mqtt-host\t\t\tmqtt-host is required\tREQUIRED\n");
-				fprintf(stdout,"# --mqtt-topic\t\t\tmqtt topic must be used at least once\n");
 				fprintf(stdout,"# --mqtt-port\t\t\tmqtt port\t\tOPTIONAL\n");
+				fprintf(stdout,"# --mqtt-user-name\t\tuser name\t\tOPTIONAL\n");
+				fprintf(stdout,"# --mqtt-password\t\tpassword\t\tOPTIONAL\n");
 				fprintf(stdout,"# --log-dir\t\t\tlogging directory, default=logLocal\n");
-				fprintf(stdout,"# --hertz\t\t\tfrequency of logging. default = 1\n");
-				fprintf(stdout,"# --millisecond-interval\tfrequency of logging excludes hertz\n");
-				fprintf(stdout,"# --display-hertz\t\tfrequency of screen update. default = off\n");
+				fprintf(stdout,"# --unitary-log-file\t\tdo not start a new file at the start of next day\n");
+				fprintf(stdout,"# --log-file-prefix\t\tUse instead of yyyymmdd\n");
+				fprintf(stdout,"# --log-file-suffix\t\tUse instead of csv\n");
+				fprintf(stdout,"# --quiet\t\t\tSuppress output to stdout ( log only)\n");
+				fprintf(stdout,"# --verbose\t\t\tinclude all debugging info to stderr\n");
 				fprintf(stdout,"#\n");
 				fprintf(stdout,"# --help\t\t\tThis help message then exit\n");
 				fprintf(stdout,"#\n");
@@ -1571,14 +1444,8 @@ int main(int argc, char **argv) {
 	}
 	else
 	if ( 0 == topic_root ) {
-		fprintf(stderr,"# There must be at least one --mqtt-topic\n");
+		fprintf(stderr,"# There must be at least one entry in the --configuration file.");
                exit(EXIT_FAILURE);
-	}
-	if ( 0 != milliseconds ) {
-		hertz = 0;
-	} else if ( 0 == hertz ) {
-		hertz = 1;
-		fprintf(stderr,"# hertz = 1\n");
 	}
 
 
