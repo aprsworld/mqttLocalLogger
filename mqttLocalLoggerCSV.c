@@ -44,6 +44,7 @@ static char *mqtt_user_name,*mqtt_passwd;
 static int unitaryLogFile;
 static char logFilePrefix[256];
 static char logFileSuffix[256] = ".csv";
+char *mqtt_status_topic;
 int outputDebug=0;
 int outputSeparatorCount;
 int hertz = 0;
@@ -106,6 +107,48 @@ TOPICS * add_topic(char *s ) {
 		q->right = p;
 
 	return	p;
+}
+int status_topic_interval(struct timeval time ) {
+	static struct timeval last_time;
+	int ret_val = (time.tv_sec > last_time.tv_sec );
+	if ( 0 != ret_val ) {
+		last_time = time;
+	}
+	return ret_val;
+}
+json_object *json_object_new_dateTime(void) {
+	struct tm *now;
+	struct timeval time;
+	char timestamp[32];
+        gettimeofday(&time, NULL);
+	now = localtime(&time.tv_sec);
+	if ( 0 == now ) {
+		fprintf(stderr,"# error calling localtime() %s",strerror(errno));
+		exit(1);
+	}
+
+	snprintf(timestamp,sizeof(timestamp),"%04d-%02d-%02d %02d:%02d:%02d.%03ld",
+		1900 + now->tm_year,1 + now->tm_mon, now->tm_mday,now->tm_hour,now->tm_min,now->tm_sec,time.tv_usec/1000);
+
+	
+	return	json_object_new_string(timestamp);
+
+}
+void pub_status_topic( struct mosquitto *mosq ) {
+	struct timeval time;
+	gettimeofday(&time, NULL);
+	if ( 0 != mqtt_status_topic && status_topic_interval(time) ) {
+		static int messageID;
+		json_object *jobj = json_object_new_object();
+		json_object_object_add(jobj,"loggingDate",json_object_new_dateTime());
+		const char *string = json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY);
+
+		int rc = mosquitto_publish(mosq, &messageID, mqtt_status_topic, strlen(string), string, 2, 0 ); 
+		json_object_put(jobj);
+		if ( 0 != rc ) {
+			fprintf(stderr,"# pub_status_topic error. '%s'\n",string);
+		}
+	}
 }
 static int _enable_logging_dir(const char *s )
 {
@@ -1037,6 +1080,7 @@ static int startup_mosquitto(void) {
 					do_display();
 				} else {
 					do_csvOutput();
+					pub_status_topic(mosq);
 				}
 				if ( outputDebug ) {
 					latency += microtime();
@@ -1267,6 +1311,7 @@ enum arguments {
 	A_mqtt_port,
 	A_mqtt_user_name,
 	A_mqtt_password,
+	A_mqtt_status_topic,
 	A_configuration,
 	A_hertz,
 	A_display_hertz,
@@ -1301,6 +1346,7 @@ int main(int argc, char **argv) {
 		        {"mqtt-port",                        1,                 0, A_mqtt_port },
 		        {"mqtt-user-name",                   1,                 0, A_mqtt_user_name },
 		        {"mqtt-passwd",                      1,                 0, A_mqtt_password },
+		        {"mqtt-status-topic",                1,                 0, A_mqtt_status_topic },
 		        {"configuration",                    1,                 0, A_configuration },
 		        {"hertz",                            1,                 0, A_hertz },
 		        {"display-hertz",                    1,                 0, A_display_hertz, },
@@ -1351,6 +1397,9 @@ int main(int argc, char **argv) {
 				break;
 			case A_configuration:	
 				strncpy(configuration,optarg,sizeof(configuration));
+				break;
+			case A_mqtt_status_topic:
+				mqtt_status_topic = strsave(optarg);
 				break;
 			case A_mqtt_host:	
 				strncpy(mqtt_host,optarg,sizeof(mqtt_host));

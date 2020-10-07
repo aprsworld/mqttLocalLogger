@@ -271,28 +271,37 @@ int status_topic_interval(struct timeval time ) {
 	}
 	return ret_val;
 }
+json_object *json_object_new_dateTime(void) {
+	struct tm *now;
+	struct timeval time;
+	char timestamp[32];
+        gettimeofday(&time, NULL);
+	now = localtime(&time.tv_sec);
+	if ( 0 == now ) {
+		fprintf(stderr,"# error calling localtime() %s",strerror(errno));
+		exit(1);
+	}
+
+	snprintf(timestamp,sizeof(timestamp),"%04d-%02d-%02d %02d:%02d:%02d.%03ld",
+		1900 + now->tm_year,1 + now->tm_mon, now->tm_mday,now->tm_hour,now->tm_min,now->tm_sec,time.tv_usec/1000);
+
+	
+	return	json_object_new_string(timestamp);
+
+}
 void pub_status_topic( struct mosquitto *mosq ) {
 	struct timeval time;
 	gettimeofday(&time, NULL);
 	if ( 0 != mqtt_status_topic && status_topic_interval(time) ) {
 		static int messageID;
-		char	buffer[128] = {};
-		char timestamp[32];
-		struct tm *now;
-		now = localtime(&time.tv_sec);
-		if ( 0 == now ) {
-			fprintf(stderr,"# error calling localtime() %s",strerror(errno));
-			exit(1);
-		}
+		json_object *jobj = json_object_new_object();
+		json_object_object_add(jobj,"loggingDate",json_object_new_dateTime());
+		const char *string = json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY);
 
-		snprintf(timestamp,sizeof(timestamp),"%04d-%02d-%02d %02d:%02d:%02d.%03ld",
-			1900 + now->tm_year,1 + now->tm_mon, now->tm_mday,now->tm_hour,now->tm_min,
-			now->tm_sec,time.tv_usec/1000);
-		snprintf(buffer,sizeof(buffer),"%s online at %s\n",program_name,timestamp);
-
-		int rc = mosquitto_publish(mosq, &messageID, mqtt_status_topic, strlen(buffer), buffer, 2, 0 ); 
+		int rc = mosquitto_publish(mosq, &messageID, mqtt_status_topic, strlen(string), string, 2, 0 ); 
+		json_object_put(jobj);
 		if ( 0 != rc ) {
-			fprintf(stderr,"# pub_status_topic error. '%s'\n",buffer);
+			fprintf(stderr,"# pub_status_topic error. '%s'\n",string);
 		}
 	}
 }
