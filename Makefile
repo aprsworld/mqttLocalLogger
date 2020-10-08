@@ -5,19 +5,19 @@ LDFLAGS=-Ljson-c-build
 SYS: mqttLocalLogger mqttLocalLoggerCSV test_jsonPath feedValuesToMQTT postProcessJsonToCSV ProcessJsonToCSV 
 	touch SYS
 
-mqttLocalLogger: mqttLocalLogger.o 
-	$(CC) mqttLocalLogger.o  -o mqttLocalLogger $(CFLAGS) $(LDFLAGS) -lm -ljson-c -lmosquitto 
+mqttLocalLogger: mqttLocalLogger.o counterFunc.o
+	$(CC) mqttLocalLogger.o counterFunc.o  -o mqttLocalLogger $(CFLAGS) $(LDFLAGS) -lm -ljson-c -lmosquitto 
 
 
-mqttLocalLogger.o: mqttLocalLogger.c
+mqttLocalLogger.o: mqttLocalLogger.c counterFunc.h
 	$(CC)  -c mqttLocalLogger.c  $(CFLAGS) -I/usr/include/json-c/
 
 
-mqttLocalLoggerCSV: mqttLocalLoggerCSV.o 
-	$(CC) mqttLocalLoggerCSV.o  -o mqttLocalLoggerCSV -Wall $(CFLAGS) $(LDFLAGS) -lm -ljson-c -lmosquitto -lncurses
+mqttLocalLoggerCSV: mqttLocalLoggerCSV.o counterFunc.o
+	$(CC) mqttLocalLoggerCSV.o counterFunc.o -o mqttLocalLoggerCSV -Wall $(CFLAGS) $(LDFLAGS) -lm -ljson-c -lmosquitto -lncurses
 
 
-mqttLocalLoggerCSV.o: mqttLocalLoggerCSV.c
+mqttLocalLoggerCSV.o: mqttLocalLoggerCSV.c counterFunc.h
 	$(CC)  -c mqttLocalLoggerCSV.c  -Wall $(CFLAGS) -I/usr/include/json-c/
 
 test_jsonPath:	test_jsonPath.o
@@ -49,6 +49,9 @@ ProcessJsonToCSV.o: ProcessJsonToCSV.c
 
 queue.o: queue.c
 	$(CC)  -c queue.c  -Wall $(CFLAGS) 
+
+counterFunc.o: counterFunc.c counterFunc.h
+	$(CC)  -c counterFunc.c  -Wall $(CFLAGS) 
 
 clean:
 	rm -f *.o

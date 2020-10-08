@@ -31,6 +31,7 @@
 #include <time.h>
 #include <math.h>
 #include <ncurses.h>
+#include "counterFunc.h"
 
 
 #define ALARM_SECONDS 600
@@ -141,6 +142,8 @@ void pub_status_topic( struct mosquitto *mosq ) {
 		static int messageID;
 		json_object *jobj = json_object_new_object();
 		json_object_object_add(jobj,"loggingDate",json_object_new_dateTime());
+		json_object_object_add(jobj,"loggingCount",json_object_new_int(getCounter0()));
+		resetCounter0();
 		const char *string = json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY);
 
 		int rc = mosquitto_publish(mosq, &messageID, mqtt_status_topic, strlen(string), string, 2, 0 ); 
@@ -1009,6 +1012,7 @@ int do_csvOutput(void) {
 	if ( 0 != out ) {
 		fputs("\n",out);
 		fclose(out);
+		incrementCounter0();
 	}
 	
 

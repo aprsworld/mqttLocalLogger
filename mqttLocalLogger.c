@@ -25,6 +25,7 @@
 #include <json.h>
 #include <mosquitto.h>
 #include <time.h>
+#include "counterFunc.h"
 
 static int mqtt_port=1883;
 static char mqtt_host[256];
@@ -253,6 +254,7 @@ void message_callback(struct mosquitto *mosq, void *obj, const struct mosquitto_
 		fprintf(stderr,"# error calling fclose(%s) %s\n",fname,strerror(errno));
 		exit(1);
 	}
+	incrementCounter0();
 }
 void topics_mosquitto_subscribe(TOPICS *p, struct mosquitto *mosq)
 {
@@ -296,6 +298,8 @@ void pub_status_topic( struct mosquitto *mosq ) {
 		static int messageID;
 		json_object *jobj = json_object_new_object();
 		json_object_object_add(jobj,"loggingDate",json_object_new_dateTime());
+		json_object_object_add(jobj,"loggingCount",json_object_new_int(getCounter0()));
+		resetCounter0();
 		const char *string = json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY);
 
 		int rc = mosquitto_publish(mosq, &messageID, mqtt_status_topic, strlen(string), string, 2, 0 ); 
