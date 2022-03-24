@@ -339,7 +339,11 @@ json_object *parse_a_string(char *string ) {
 	if ( outputDebug ) {
 		fprintf(stderr,"# parse_a_string() output = %s\n",json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY));
 		latency += microtime();
+#if 4 == LONGSIZE
 		fprintf(stderr,"# parse_a_string() latency %lld\n",(long long) latency);
+#else
+		fprintf(stderr,"# parse_a_string() latency %lld\n",latency);
+#endif
 	}
 	json_tokener_free(tok);
 
@@ -407,9 +411,9 @@ void updateColumnStats( COLUMN *this_column,  TOPICS *this_topic ) {
 				break;
 				
 		}
-		if ( 0 != this_column->c_this_topic->t_jobj ) {
-			json_object_put(this_column->c_this_topic->t_jobj);
-		}
+	}
+	if ( 0 != this_column->c_this_topic->t_jobj ) {
+		json_object_put(this_column->c_this_topic->t_jobj);
 	}
 
 }
@@ -817,7 +821,11 @@ int next_msec(struct timeval *real_time, struct timeval *trigger_time ) {
 
 	if ( outputDebug ) {
 		latency += microtime();
+#if 4 == LONGSIZE
 		fprintf(stderr,"# next_msec latency %lld\n",(long long) latency);
+#else
+		fprintf(stderr,"# next_msec latency %lld\n",latency);
+#endif
 	}
 			
 		
@@ -915,7 +923,11 @@ static void display_this_column( COLUMN *this_column ) {
 		char buffer[32];
 		uint64_t latency =  microtime() - this_column->uLastUpdate;
 		latency /= 1000;	/* convert to msec */
+#if 4 == LONGSIZE
 		snprintf(buffer,sizeof(buffer),"%3lld.%03lld s",(long long) latency/1000, (long long) latency % 1000);
+#else
+		snprintf(buffer,sizeof(buffer),"%3lld.%03lld s",latency/1000, latency % 1000);
+#endif
 		mvaddstr(this_column->csvAgerY,this_column->csvAgerX,buffer);
 	}
 
@@ -1075,7 +1087,11 @@ static int startup_mosquitto(void) {
 			rc = mosquitto_loop(mosq, loop_interval, 1);
 			if ( outputDebug ) {
 				latency += microtime();
+#if 4 == LONGSIZE
 				fprintf(stderr,"# mosquitto_loop() latency %lld %d\n",(long long) latency,++whileCount);
+#else
+				fprintf(stderr,"# mosquitto_loop() latency %lld %d\n",latency,++whileCount);
+#endif
 			}
 
 			if ( MOSQ_ERR_SUCCESS == rc ) {
@@ -1088,7 +1104,11 @@ static int startup_mosquitto(void) {
 				}
 				if ( outputDebug ) {
 					latency += microtime();
+#if 4 == LONGSIZE
 					fprintf(stderr,"# do_csvOutput() latency %lld\n",(long long) latency);
+#else
+					fprintf(stderr,"# do_csvOutput() latency %lld\n",latency);
+#endif
 				}
 			}
 

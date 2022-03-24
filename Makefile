@@ -2,8 +2,12 @@ CC=gcc
 CFLAGS=-Ijson-c-0.14 -I. -Wunused-function  -Wunused-variable -g
 LDFLAGS=-Ljson-c-build
 
-SYS: mqttLocalLogger mqttLocalLoggerCSV test_jsonPath feedValuesToMQTT postProcessJsonToCSV ProcessJsonToCSV 
+SYS: longsize.h mqttLocalLogger mqttLocalLoggerCSV test_jsonPath feedValuesToMQTT postProcessJsonToCSV ProcessJsonToCSV 
 	touch SYS
+
+longsize.h: longsize.c
+	$(CC) longsize.c -o longsize
+	echo "#define LONGSIZE `./longsize`" > longsize.h
 
 mqttLocalLogger: mqttLocalLogger.o counterFunc.o
 	$(CC) mqttLocalLogger.o counterFunc.o  -o mqttLocalLogger $(CFLAGS) $(LDFLAGS) -lm -ljson-c -lmosquitto 
