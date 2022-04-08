@@ -58,6 +58,8 @@ char last_packet_received[256];
 extern char *optarg;
 extern int optind, opterr, optopt;
 
+static int _outputHeaders(FILE *out);
+
 char	*strsave(char *s ) {
 	char	*ret_val = 0;
 
@@ -198,6 +200,8 @@ static FILE * _openLogfile(void) {
 	struct tm *now;
 	struct timeval time;
         gettimeofday(&time, NULL);
+	struct stat buf;
+	int need_headers;
 
 	now = localtime(&time.tv_sec);
 	if ( 0 == now ) {
@@ -221,12 +225,25 @@ static FILE * _openLogfile(void) {
 		snprintf(fname,sizeof(fname),"%s/%s%s",logDir,prefix,suffix);
 	}
 	else snprintf(fname,sizeof(fname),"%s/%s%s",logDir,prefix,suffix);
+
+#if 0
+	/* use this to test file switching instead of waiting past 00:00 zulu */
+	snprintf(fname+strlen(fname),5,".%d",now->tm_sec % 10);	/* switch files every 10 seconds */
+#endif
+
+	need_headers = stat(fname,&buf);
+
+
 		
 	out = fopen(fname,"a");
 	if ( 0 == out )	{
 		fprintf(stderr,"# error calling fopen(%s) %s\n",fname,strerror(errno));
 		exit(1);
 	}
+	if ( 0 != need_headers ) {
+		_outputHeaders(out);
+	}
+
 	return	out;
 }
 
@@ -860,33 +877,6 @@ int outputThisColumnHeader( int idx, FILE *out ) {
 	
 return	0;
 }
-static int _outputHeaders(void) {
-	int i;
-	FILE *out = _openLogfile();
-
-	if ( 0 == noOutputStdout ) {
-		fputs("DATE,",stdout);
-	}
-	if ( 0 != out ) {
-		fputs("DATE,",out);
-	}
-	outputSeparatorCount = 1;
-	for ( i = 0; columnsCount > i; i++ ) {
-		outputThisColumnHeader(i,out);
-	}
-	if ( 0 == noOutputStdout ) {
-		fputs("\n",stdout);
-		fflush(stdout);
-	}
-	if ( 0 != out ) {
-		fputs("\n",out);
-		fclose(out);
-	}
-
-	clear_all_outputs();
-
-return	false;
-}
 
 static void display_this_column( COLUMN *this_column ) {
 	if ( 0 != this_column->debug ) {
@@ -1496,7 +1486,6 @@ int main(int argc, char **argv) {
 	if ( _enable_logging_dir(logDir)) {
 		return	1;
 	}
-	_outputHeaders();
 	chdir(logDir);
 
 
@@ -1509,4 +1498,26 @@ int main(int argc, char **argv) {
 	}
 
 	return	rc;
+}
+static int _outputHeaders(FILE *out) {
+	int i;
+
+	if ( 0 == noOutputStdout ) {
+		fputs("DATE,",stdout);
+	}
+	if ( 0 != out ) {
+		fputs("DATE,",out);
+	}
+	outputSeparatorCount = 1;
+	for ( i = 0; columnsCount > i; i++ ) {
+		outputThisColumnHeader(i,out);
+	}
+	if ( 0 == noOutputStdout ) {
+		fputs("\n",stdout);
+		fflush(stdout);
+	}
+
+	clear_all_outputs();
+
+return	false;
 }
