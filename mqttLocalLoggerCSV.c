@@ -1517,6 +1517,11 @@ static int _outputHeaders(FILE *out) {
 		fflush(stdout);
 	}
 
+	if ( 0 != out ) {
+		fputs("\n",out);
+		fflush(out);
+	}
+
 	clear_all_outputs();
 
 return	false;
